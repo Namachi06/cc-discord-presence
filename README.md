@@ -13,7 +13,7 @@ Show your Claude Code session on Discord! Display your current project, git bran
 | Windows (x64) | ✅ Tested |
 | Windows (ARM64) | ⚠️ Untested |
 
-> **Note**: macOS Intel and Linux should work but haven't been verified. Please [report problems](https://github.com/tsanva/cc-discord-presence/issues).
+> **Note**: macOS Intel and Linux should work but haven't been verified. Please [report problems](https://github.com/Namachi06/cc-discord-presence/issues).
 >
 > **Windows users**: Requires [Git Bash](https://git-scm.com/downloads) (included with Git for Windows) for automatic plugin hooks. Alternatively, run the PowerShell scripts manually (`scripts/start.ps1` and `scripts/stop.ps1`). WSL won't work as Discord runs on the Windows host.
 
@@ -32,7 +32,7 @@ Show your Claude Code session on Discord! Display your current project, git bran
 
 ```bash
 # Add the marketplace
-claude plugin marketplace add tsanva/cc-discord-presence
+claude plugin marketplace add Namachi06/cc-discord-presence
 
 # Install the plugin
 claude plugin install cc-discord-presence@cc-discord-presence
@@ -44,7 +44,7 @@ That's it! The plugin will automatically start when you begin a Claude Code sess
 
 ```bash
 # Clone and build
-git clone https://github.com/tsanva/cc-discord-presence.git
+git clone https://github.com/Namachi06/cc-discord-presence.git
 cd cc-discord-presence
 go build -o cc-discord-presence .
 

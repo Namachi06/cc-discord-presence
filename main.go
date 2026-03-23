@@ -524,7 +524,7 @@ func readSessionData() *SessionData {
 		usingFallback = true
 		nudgeShown = true
 		fmt.Println("\n💡 Tip: For more accurate token/cost data, configure the statusline wrapper.")
-		fmt.Println("   See: https://github.com/tsanva/cc-discord-presence#statusline-setup")
+		fmt.Println("   See: https://github.com/Namachi06/cc-discord-presence#statusline-setup")
 	}
 
 	return parseJSONLSession(jsonlPath, projectPath)
