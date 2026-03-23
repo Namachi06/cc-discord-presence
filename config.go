@@ -15,12 +15,13 @@ type Config struct {
 
 // ShowConfig controls which fields are visible in the Discord presence.
 type ShowConfig struct {
-	ProjectName *bool `json:"project_name"`
-	GitBranch   *bool `json:"git_branch"`
-	ModelName   *bool `json:"model_name"`
-	Tokens      *bool `json:"tokens"`
-	Cost        *bool `json:"cost"`
-	Duration    *bool `json:"duration"`
+	ProjectName   *bool `json:"project_name"`
+	GitBranch     *bool `json:"git_branch"`
+	ModelName     *bool `json:"model_name"`
+	Tokens        *bool `json:"tokens"`
+	Cost          *bool `json:"cost"`
+	CostInTooltip *bool `json:"cost_in_tooltip"`
+	Duration      *bool `json:"duration"`
 }
 
 // DisplayConfig controls formatting and customization of the presence.
@@ -56,8 +57,9 @@ func DefaultConfig() *Config {
 			GitBranch:   boolPtr(true),
 			ModelName:   boolPtr(true),
 			Tokens:      boolPtr(true),
-			Cost:        boolPtr(true),
-			Duration:    boolPtr(true),
+			Cost:          boolPtr(true),
+			CostInTooltip: boolPtr(false),
+			Duration:      boolPtr(true),
 		},
 		Display: DisplayConfig{
 			DetailsPrefix: "Working on",
@@ -105,6 +107,9 @@ func mergeConfig(defaults, user *Config) *Config {
 	}
 	if user.Show.Cost != nil {
 		result.Show.Cost = user.Show.Cost
+	}
+	if user.Show.CostInTooltip != nil {
+		result.Show.CostInTooltip = user.Show.CostInTooltip
 	}
 	if user.Show.Duration != nil {
 		result.Show.Duration = user.Show.Duration
@@ -172,11 +177,24 @@ func buildStateLine(session *SessionData, cfg *Config) string {
 	if showField(cfg.Show.Tokens) {
 		parts = append(parts, fmt.Sprintf("%s tokens", formatNumber(session.TotalTokens)))
 	}
-	if showField(cfg.Show.Cost) {
+	if showField(cfg.Show.Cost) && !showField(cfg.Show.CostInTooltip) {
 		parts = append(parts, fmt.Sprintf("$%.*f", precision, session.TotalCost))
 	}
 
 	return truncate(strings.Join(parts, sep), 128)
+}
+
+// buildLargeText constructs the tooltip text, optionally including cost.
+func buildLargeText(session *SessionData, cfg *Config) string {
+	base := cfg.Display.LargeText
+	if showField(cfg.Show.Cost) && showField(cfg.Show.CostInTooltip) {
+		precision := 4
+		if cfg.Display.CostPrecision != nil {
+			precision = *cfg.Display.CostPrecision
+		}
+		return fmt.Sprintf("%s — $%.*f", base, precision, session.TotalCost)
+	}
+	return base
 }
 
 // truncate shortens a string to maxLen, appending "..." if truncated.

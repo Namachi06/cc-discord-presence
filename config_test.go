@@ -29,6 +29,9 @@ func TestDefaultConfig(t *testing.T) {
 	if !showField(cfg.Show.Duration) {
 		t.Error("Duration should default to true")
 	}
+	if showField(cfg.Show.CostInTooltip) {
+		t.Error("CostInTooltip should default to false")
+	}
 
 	// Display defaults
 	if cfg.Display.DetailsPrefix != "Working on" {
@@ -451,6 +454,15 @@ func TestBuildStateLine(t *testing.T) {
 		})
 	}
 
+	t.Run("cost in tooltip excludes cost from state", func(t *testing.T) {
+		cfg := DefaultConfig()
+		cfg.Show.CostInTooltip = boolPtr(true)
+		got := buildStateLine(session, cfg)
+		if got != "Sonnet 4 | 10.5K tokens" {
+			t.Errorf("cost_in_tooltip should exclude cost, got %q", got)
+		}
+	})
+
 	t.Run("empty model name with model shown", func(t *testing.T) {
 		noModelSession := &SessionData{
 			TotalTokens: 5000,
@@ -460,6 +472,40 @@ func TestBuildStateLine(t *testing.T) {
 		got := buildStateLine(noModelSession, cfg)
 		if got != "5.0K tokens | $0.0500" {
 			t.Errorf("empty model should be omitted, got %q", got)
+		}
+	})
+}
+
+func TestBuildLargeText(t *testing.T) {
+	session := &SessionData{
+		TotalCost: 0.49,
+	}
+
+	t.Run("default no cost in tooltip", func(t *testing.T) {
+		cfg := DefaultConfig()
+		got := buildLargeText(session, cfg)
+		if got != "Clawd Code - Discord Rich Presence for Claude Code" {
+			t.Errorf("default should be base text, got %q", got)
+		}
+	})
+
+	t.Run("cost in tooltip", func(t *testing.T) {
+		cfg := DefaultConfig()
+		cfg.Show.CostInTooltip = boolPtr(true)
+		cfg.Display.CostPrecision = intPtr(2)
+		got := buildLargeText(session, cfg)
+		if got != "Clawd Code - Discord Rich Presence for Claude Code — $0.49" {
+			t.Errorf("should include cost, got %q", got)
+		}
+	})
+
+	t.Run("cost disabled ignores tooltip", func(t *testing.T) {
+		cfg := DefaultConfig()
+		cfg.Show.Cost = boolPtr(false)
+		cfg.Show.CostInTooltip = boolPtr(true)
+		got := buildLargeText(session, cfg)
+		if got != "Clawd Code - Discord Rich Presence for Claude Code" {
+			t.Errorf("cost disabled should not show in tooltip, got %q", got)
 		}
 	})
 }
