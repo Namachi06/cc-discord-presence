@@ -68,13 +68,15 @@ type StatusLineData struct {
 
 // SessionData holds parsed session information
 type SessionData struct {
-	ProjectName string
-	ProjectPath string
-	GitBranch   string
-	ModelName   string
-	TotalTokens int64
-	TotalCost   float64
-	StartTime   time.Time
+	ProjectName  string
+	ProjectPath  string
+	GitBranch    string
+	ModelName    string
+	TotalTokens  int64
+	InputTokens  int64
+	OutputTokens int64
+	TotalCost    float64
+	StartTime    time.Time
 }
 
 // JSONLMessage represents a message entry in JSONL files
@@ -99,6 +101,9 @@ var (
 	discordClient    *discord.Client
 	usingFallback    bool
 	nudgeShown       bool
+	lastSessionData  *SessionData
+	lastDataChange   time.Time
+	isIdle           bool
 )
 
 func init() {
@@ -152,9 +157,12 @@ func main() {
 		os.Exit(0)
 	}()
 
+	// Initialize idle detection
+	lastDataChange = time.Now()
+
 	// Try initial read and show data source
 	if session := readSessionData(); session != nil {
-		updatePresence(session)
+		processSessionUpdate(session)
 		if usingFallback {
 			fmt.Printf("✓ Found active session: %s (using JSONL fallback)\n", session.ProjectName)
 		} else {
@@ -196,13 +204,15 @@ func readStatusLineData() *SessionData {
 	}
 
 	return &SessionData{
-		ProjectName: projectName,
-		ProjectPath: projectPath,
-		GitBranch:   getGitBranch(projectPath),
-		ModelName:   statusLine.Model.DisplayName,
-		TotalTokens: statusLine.ContextWindow.TotalInputTokens + statusLine.ContextWindow.TotalOutputTokens,
-		TotalCost:   statusLine.Cost.TotalCostUSD,
-		StartTime:   sessionStartTime,
+		ProjectName:  projectName,
+		ProjectPath:  projectPath,
+		GitBranch:    getGitBranch(projectPath),
+		ModelName:    statusLine.Model.DisplayName,
+		InputTokens:  statusLine.ContextWindow.TotalInputTokens,
+		OutputTokens: statusLine.ContextWindow.TotalOutputTokens,
+		TotalTokens:  statusLine.ContextWindow.TotalInputTokens + statusLine.ContextWindow.TotalOutputTokens,
+		TotalCost:    statusLine.Cost.TotalCostUSD,
+		StartTime:    sessionStartTime,
 	}
 }
 
@@ -361,13 +371,15 @@ func parseJSONLSession(jsonlPath, _ string) *SessionData {
 	// Use daemon start time for elapsed time display
 	// This shows how long Discord presence has been active, not total session time
 	return &SessionData{
-		ProjectName: projectName,
-		ProjectPath: projectPath,
-		GitBranch:   getGitBranch(projectPath),
-		ModelName:   modelName,
-		TotalTokens: totalInputTokens + totalOutputTokens,
-		TotalCost:   totalCost,
-		StartTime:   sessionStartTime,
+		ProjectName:  projectName,
+		ProjectPath:  projectPath,
+		GitBranch:    getGitBranch(projectPath),
+		ModelName:    modelName,
+		InputTokens:  totalInputTokens,
+		OutputTokens: totalOutputTokens,
+		TotalTokens:  totalInputTokens + totalOutputTokens,
+		TotalCost:    totalCost,
+		StartTime:    sessionStartTime,
 	}
 }
 
@@ -432,10 +444,77 @@ func readSessionData() *SessionData {
 	return parseJSONLSession(jsonlPath, projectPath)
 }
 
+// sessionDataChanged checks if session data has meaningfully changed.
+func sessionDataChanged(old, new *SessionData) bool {
+	if old == nil {
+		return true
+	}
+	return old.TotalTokens != new.TotalTokens ||
+		old.TotalCost != new.TotalCost ||
+		old.ProjectName != new.ProjectName ||
+		old.ModelName != new.ModelName ||
+		old.GitBranch != new.GitBranch
+}
+
+// checkIdle returns whether the session should be considered idle.
+func checkIdle(old, new *SessionData, lastChange time.Time, timeoutSecs int) (idle bool, newLastChange time.Time) {
+	if timeoutSecs <= 0 {
+		return false, lastChange
+	}
+	if sessionDataChanged(old, new) {
+		return false, time.Now()
+	}
+	if time.Since(lastChange) >= time.Duration(timeoutSecs)*time.Second {
+		return true, lastChange
+	}
+	return false, lastChange
+}
+
+// processSessionUpdate handles idle detection then updates the presence.
+func processSessionUpdate(session *SessionData) {
+	if session == nil {
+		return
+	}
+
+	cfg := currentConfig
+	idleTimeout := 0
+	if cfg.Display.IdleTimeout != nil {
+		idleTimeout = *cfg.Display.IdleTimeout
+	}
+
+	wasIdle := isIdle
+	isIdle, lastDataChange = checkIdle(lastSessionData, session, lastDataChange, idleTimeout)
+
+	if isIdle && !wasIdle {
+		fmt.Println("💤 Session idle")
+	} else if !isIdle && wasIdle {
+		fmt.Println("🔄 Session active again")
+	}
+
+	lastSessionData = session
+	updatePresence(session)
+}
+
 func updatePresence(session *SessionData) {
 	cfg := currentConfig
-	details := buildDetailsLine(session, cfg)
-	state := buildStateLine(session, cfg)
+
+	var details, state string
+
+	if cfg.Display.DetailsFormat != "" {
+		details = formatTemplate(cfg.Display.DetailsFormat, session, cfg)
+	} else {
+		details = buildDetailsLine(session, cfg)
+	}
+
+	if cfg.Display.StateFormat != "" {
+		state = formatTemplate(cfg.Display.StateFormat, session, cfg)
+	} else {
+		state = buildStateLine(session, cfg)
+	}
+
+	if isIdle {
+		state = "Idle"
+	}
 
 	activity := discord.Activity{
 		Details:   details,
@@ -444,6 +523,12 @@ func updatePresence(session *SessionData) {
 	}
 	if showField(cfg.Show.Duration) {
 		activity.StartTime = &session.StartTime
+	}
+	for _, b := range cfg.Buttons {
+		activity.Buttons = append(activity.Buttons, discord.Button{
+			Label: b.Label,
+			URL:   b.URL,
+		})
 	}
 
 	if err := discordClient.SetActivity(activity); err != nil {
@@ -497,13 +582,13 @@ func watchForChanges() {
 					fmt.Println("⚠ discord_app_id change requires restart to take effect")
 				}
 				if session := readSessionData(); session != nil {
-					updatePresence(session)
+					processSessionUpdate(session)
 				}
 			}
 			// Respond to statusline data file changes
 			if baseName == "discord-presence-data.json" {
 				if session := readSessionData(); session != nil {
-					updatePresence(session)
+					processSessionUpdate(session)
 				}
 			}
 		case err, ok := <-watcher.Errors:
@@ -514,7 +599,7 @@ func watchForChanges() {
 		case <-ticker.C:
 			// Poll reads from either statusline or JSONL fallback
 			if session := readSessionData(); session != nil {
-				updatePresence(session)
+				processSessionUpdate(session)
 			}
 		}
 	}
@@ -526,7 +611,7 @@ func pollForChanges() {
 
 	for range ticker.C {
 		if session := readSessionData(); session != nil {
-			updatePresence(session)
+			processSessionUpdate(session)
 		}
 	}
 }

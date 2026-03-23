@@ -135,18 +135,42 @@ You can customize which fields are displayed on Discord by creating a config fil
     "git_branch": false,
     "model_name": true,
     "tokens": true,
-    "cost": false,
+    "split_tokens": true,
+    "cost": true,
+    "cost_in_details": true,
     "duration": true
   },
   "display": {
     "details_prefix": "Coding",
     "separator": " - ",
     "cost_precision": 2,
+    "idle_timeout": 300,
     "large_text": "My Custom Presence Text",
     "discord_app_id": "YOUR_APP_ID"
+  },
+  "buttons": [
+    {"label": "GitHub", "url": "https://github.com/username"},
+    {"label": "Portfolio", "url": "https://example.com"}
+  ]
+}
+```
+
+### Format Templates
+
+Override the default display format with custom templates. When set, they replace the `show.*` system entirely.
+
+```json
+{
+  "display": {
+    "details_format": "{project} | ${cost}",
+    "state_format": "{model} | {in_tokens} in | {out_tokens} out"
   }
 }
 ```
+
+Available variables: `{project}`, `{branch}`, `{model}`, `{tokens}`, `{in_tokens}`, `{out_tokens}`, `{cost}`, `{duration}`, `{separator}`
+
+> **Note**: `{cost}` returns the number without `$` (e.g., `0.12`). Write `${cost}` to get `$0.12`.
 
 ### Field Reference
 
@@ -156,18 +180,23 @@ You can customize which fields are displayed on Discord by creating a config fil
 | `show.git_branch` | bool | `true` | Show git branch in Details line |
 | `show.model_name` | bool | `true` | Show Claude model in State line |
 | `show.tokens` | bool | `true` | Show token count in State line |
+| `show.split_tokens` | bool | `false` | Show input/output tokens separately (`150K in \| 50K out`) |
 | `show.cost` | bool | `true` | Show cost in State line |
 | `show.cost_in_details` | bool | `false` | Move cost to Details line instead of State line |
 | `show.duration` | bool | `true` | Show elapsed time |
 | `display.details_prefix` | string | `"Working on"` | Prefix before project/branch |
+| `display.details_format` | string | `""` | Custom template for Details line (overrides show.*) |
+| `display.state_format` | string | `""` | Custom template for State line (overrides show.*) |
 | `display.separator` | string | `" \| "` | Separator between State parts |
 | `display.cost_precision` | int | `4` | Decimal places for cost (0-10) |
+| `display.idle_timeout` | int | `0` | Seconds before showing "Idle" (0 = disabled, max 3600) |
 | `display.large_text` | string | `"Clawd Code - ..."` | Tooltip text on the large icon |
 | `display.discord_app_id` | string | `""` | Custom Discord Application ID |
+| `buttons` | array | `[]` | Up to 2 clickable buttons (label max 32 chars, url must be http/https) |
 
 > **Live reload**: Changes to the config file are picked up automatically — no need to restart the daemon.
 >
-> **Note**: Changing `discord_app_id` requires a daemon restart.
+> **Note**: Changing `discord_app_id` requires a daemon restart. Buttons are only visible to other Discord users, not to yourself.
 
 ## Discord Presence Display
 

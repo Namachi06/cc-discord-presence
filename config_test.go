@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -10,7 +11,7 @@ import (
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
 
-	// All Show fields should default to true
+	// Show fields that default to true
 	if !showField(cfg.Show.ProjectName) {
 		t.Error("ProjectName should default to true")
 	}
@@ -29,8 +30,13 @@ func TestDefaultConfig(t *testing.T) {
 	if !showField(cfg.Show.Duration) {
 		t.Error("Duration should default to true")
 	}
+
+	// Show fields that default to false
 	if showField(cfg.Show.CostInDetails) {
 		t.Error("CostInDetails should default to false")
+	}
+	if showFieldDefault(cfg.Show.SplitTokens, false) {
+		t.Error("SplitTokens should default to false")
 	}
 
 	// Display defaults
@@ -41,13 +47,27 @@ func TestDefaultConfig(t *testing.T) {
 		t.Errorf("Separator = %q, want %q", cfg.Display.Separator, " | ")
 	}
 	if cfg.Display.CostPrecision == nil || *cfg.Display.CostPrecision != 4 {
-		t.Errorf("CostPrecision should default to 4")
+		t.Error("CostPrecision should default to 4")
+	}
+	if cfg.Display.IdleTimeout == nil || *cfg.Display.IdleTimeout != 0 {
+		t.Error("IdleTimeout should default to 0")
+	}
+	if cfg.Display.DetailsFormat != "" {
+		t.Error("DetailsFormat should default to empty")
+	}
+	if cfg.Display.StateFormat != "" {
+		t.Error("StateFormat should default to empty")
 	}
 	if cfg.Display.LargeText != "Clawd Code - Discord Rich Presence for Claude Code" {
 		t.Errorf("LargeText = %q, want default", cfg.Display.LargeText)
 	}
 	if cfg.Display.DiscordAppID != "" {
-		t.Errorf("DiscordAppID should default to empty string")
+		t.Error("DiscordAppID should default to empty string")
+	}
+
+	// Buttons default to nil
+	if len(cfg.Buttons) != 0 {
+		t.Error("Buttons should default to empty")
 	}
 }
 
@@ -66,6 +86,28 @@ func TestShowField(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := showField(tt.ptr); got != tt.want {
 				t.Errorf("showField() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestShowFieldDefault(t *testing.T) {
+	tests := []struct {
+		name       string
+		ptr        *bool
+		defaultVal bool
+		want       bool
+	}{
+		{"nil with default true", nil, true, true},
+		{"nil with default false", nil, false, false},
+		{"true overrides default false", boolPtr(true), false, true},
+		{"false overrides default true", boolPtr(false), true, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := showFieldDefault(tt.ptr, tt.defaultVal); got != tt.want {
+				t.Errorf("showFieldDefault() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -132,15 +174,6 @@ func TestLoadConfig_PartialConfig(t *testing.T) {
 	if !showField(cfg.Show.ProjectName) {
 		t.Error("project_name should remain true (default)")
 	}
-	if !showField(cfg.Show.ModelName) {
-		t.Error("model_name should remain true (default)")
-	}
-	if !showField(cfg.Show.Tokens) {
-		t.Error("tokens should remain true (default)")
-	}
-	if !showField(cfg.Show.Duration) {
-		t.Error("duration should remain true (default)")
-	}
 }
 
 func TestLoadConfig_FullConfig(t *testing.T) {
@@ -152,52 +185,44 @@ func TestLoadConfig_FullConfig(t *testing.T) {
 			"git_branch": false,
 			"model_name": true,
 			"tokens": false,
+			"split_tokens": true,
 			"cost": false,
 			"duration": true
 		},
 		"display": {
 			"details_prefix": "Coding",
+			"details_format": "{project}",
+			"state_format": "{model}",
 			"separator": " - ",
 			"cost_precision": 2,
+			"idle_timeout": 60,
 			"large_text": "My Custom Text",
 			"discord_app_id": "123456789"
-		}
+		},
+		"buttons": [
+			{"label": "GitHub", "url": "https://github.com/test"}
+		]
 	}`), 0644)
 
 	cfg := LoadConfig()
 
-	if !showField(cfg.Show.ProjectName) {
-		t.Error("project_name should be true")
-	}
 	if showField(cfg.Show.GitBranch) {
 		t.Error("git_branch should be false")
 	}
-	if !showField(cfg.Show.ModelName) {
-		t.Error("model_name should be true")
+	if !showFieldDefault(cfg.Show.SplitTokens, false) {
+		t.Error("split_tokens should be true")
 	}
-	if showField(cfg.Show.Tokens) {
-		t.Error("tokens should be false")
+	if cfg.Display.DetailsFormat != "{project}" {
+		t.Errorf("DetailsFormat = %q, want {project}", cfg.Display.DetailsFormat)
 	}
-	if showField(cfg.Show.Cost) {
-		t.Error("cost should be false")
+	if cfg.Display.StateFormat != "{model}" {
+		t.Errorf("StateFormat = %q, want {model}", cfg.Display.StateFormat)
 	}
-	if !showField(cfg.Show.Duration) {
-		t.Error("duration should be true")
+	if *cfg.Display.IdleTimeout != 60 {
+		t.Errorf("IdleTimeout = %d, want 60", *cfg.Display.IdleTimeout)
 	}
-	if cfg.Display.DetailsPrefix != "Coding" {
-		t.Errorf("DetailsPrefix = %q, want %q", cfg.Display.DetailsPrefix, "Coding")
-	}
-	if cfg.Display.Separator != " - " {
-		t.Errorf("Separator = %q, want %q", cfg.Display.Separator, " - ")
-	}
-	if cfg.Display.CostPrecision == nil || *cfg.Display.CostPrecision != 2 {
-		t.Error("CostPrecision should be 2")
-	}
-	if cfg.Display.LargeText != "My Custom Text" {
-		t.Errorf("LargeText = %q, want %q", cfg.Display.LargeText, "My Custom Text")
-	}
-	if cfg.Display.DiscordAppID != "123456789" {
-		t.Errorf("DiscordAppID = %q, want %q", cfg.Display.DiscordAppID, "123456789")
+	if len(cfg.Buttons) != 1 || cfg.Buttons[0].Label != "GitHub" {
+		t.Error("buttons should have 1 entry with label GitHub")
 	}
 }
 
@@ -276,6 +301,101 @@ func TestCostPrecisionClamp(t *testing.T) {
 	})
 }
 
+func TestIdleTimeoutClamp(t *testing.T) {
+	defaults := DefaultConfig()
+
+	t.Run("negative clamped to 0", func(t *testing.T) {
+		user := &Config{Display: DisplayConfig{IdleTimeout: intPtr(-10)}}
+		result := mergeConfig(defaults, user)
+		if *result.Display.IdleTimeout != 0 {
+			t.Errorf("expected 0, got %d", *result.Display.IdleTimeout)
+		}
+	})
+
+	t.Run("over 3600 clamped to 3600", func(t *testing.T) {
+		user := &Config{Display: DisplayConfig{IdleTimeout: intPtr(9999)}}
+		result := mergeConfig(defaults, user)
+		if *result.Display.IdleTimeout != 3600 {
+			t.Errorf("expected 3600, got %d", *result.Display.IdleTimeout)
+		}
+	})
+
+	t.Run("valid value kept", func(t *testing.T) {
+		user := &Config{Display: DisplayConfig{IdleTimeout: intPtr(120)}}
+		result := mergeConfig(defaults, user)
+		if *result.Display.IdleTimeout != 120 {
+			t.Errorf("expected 120, got %d", *result.Display.IdleTimeout)
+		}
+	})
+}
+
+func TestValidateButtons(t *testing.T) {
+	t.Run("empty list", func(t *testing.T) {
+		result := validateButtons(nil)
+		if len(result) != 0 {
+			t.Error("empty input should return empty")
+		}
+	})
+
+	t.Run("valid button", func(t *testing.T) {
+		result := validateButtons([]ButtonConfig{{Label: "GitHub", URL: "https://github.com"}})
+		if len(result) != 1 || result[0].Label != "GitHub" {
+			t.Error("valid button should pass through")
+		}
+	})
+
+	t.Run("max 2 buttons", func(t *testing.T) {
+		result := validateButtons([]ButtonConfig{
+			{Label: "A", URL: "https://a.com"},
+			{Label: "B", URL: "https://b.com"},
+			{Label: "C", URL: "https://c.com"},
+		})
+		if len(result) != 2 {
+			t.Errorf("expected 2, got %d", len(result))
+		}
+	})
+
+	t.Run("empty label dropped", func(t *testing.T) {
+		result := validateButtons([]ButtonConfig{{Label: "", URL: "https://a.com"}})
+		if len(result) != 0 {
+			t.Error("empty label should be dropped")
+		}
+	})
+
+	t.Run("empty URL dropped", func(t *testing.T) {
+		result := validateButtons([]ButtonConfig{{Label: "A", URL: ""}})
+		if len(result) != 0 {
+			t.Error("empty URL should be dropped")
+		}
+	})
+
+	t.Run("non-http URL dropped", func(t *testing.T) {
+		result := validateButtons([]ButtonConfig{{Label: "A", URL: "ftp://a.com"}})
+		if len(result) != 0 {
+			t.Error("non-http URL should be dropped")
+		}
+	})
+
+	t.Run("label truncated to 32 chars", func(t *testing.T) {
+		result := validateButtons([]ButtonConfig{{Label: strings.Repeat("a", 50), URL: "https://a.com"}})
+		if len(result) != 1 || len(result[0].Label) != 32 {
+			t.Errorf("label should be truncated to 32, got %d", len(result[0].Label))
+		}
+	})
+
+	t.Run("mixed valid and invalid", func(t *testing.T) {
+		result := validateButtons([]ButtonConfig{
+			{Label: "", URL: "https://a.com"},
+			{Label: "Valid", URL: "https://b.com"},
+			{Label: "No URL", URL: ""},
+			{Label: "Also Valid", URL: "http://c.com"},
+		})
+		if len(result) != 2 || result[0].Label != "Valid" || result[1].Label != "Also Valid" {
+			t.Errorf("expected Valid + Also Valid, got %v", result)
+		}
+	})
+}
+
 func TestBuildDetailsLine(t *testing.T) {
 	session := &SessionData{
 		ProjectName: "my-project",
@@ -287,10 +407,10 @@ func TestBuildDetailsLine(t *testing.T) {
 	}
 
 	tests := []struct {
-		name    string
-		show    ShowConfig
-		prefix  string
-		want    string
+		name   string
+		show   ShowConfig
+		prefix string
+		want   string
 	}{
 		{
 			name:   "all visible with branch",
@@ -339,10 +459,7 @@ func TestBuildDetailsLine(t *testing.T) {
 	}
 
 	t.Run("branch visible but empty", func(t *testing.T) {
-		noBranchSession := &SessionData{
-			ProjectName: "my-project",
-			GitBranch:   "",
-		}
+		noBranchSession := &SessionData{ProjectName: "my-project", GitBranch: ""}
 		cfg := DefaultConfig()
 		got := buildDetailsLine(noBranchSession, cfg)
 		if got != "Working on: my-project" {
@@ -350,12 +467,8 @@ func TestBuildDetailsLine(t *testing.T) {
 		}
 	})
 
-	t.Run("cost in details when cost_in_tooltip", func(t *testing.T) {
-		costSession := &SessionData{
-			ProjectName: "my-project",
-			GitBranch:   "main",
-			TotalCost:   21.89,
-		}
+	t.Run("cost in details", func(t *testing.T) {
+		costSession := &SessionData{ProjectName: "my-project", GitBranch: "main", TotalCost: 21.89}
 		cfg := DefaultConfig()
 		cfg.Show.CostInDetails = boolPtr(true)
 		cfg.Display.CostPrecision = intPtr(2)
@@ -366,10 +479,7 @@ func TestBuildDetailsLine(t *testing.T) {
 	})
 
 	t.Run("project hidden branch empty", func(t *testing.T) {
-		noBranchSession := &SessionData{
-			ProjectName: "my-project",
-			GitBranch:   "",
-		}
+		noBranchSession := &SessionData{ProjectName: "my-project", GitBranch: ""}
 		cfg := DefaultConfig()
 		cfg.Show.ProjectName = boolPtr(false)
 		got := buildDetailsLine(noBranchSession, cfg)
@@ -381,11 +491,13 @@ func TestBuildDetailsLine(t *testing.T) {
 
 func TestBuildStateLine(t *testing.T) {
 	session := &SessionData{
-		ProjectName: "my-project",
-		ModelName:   "Sonnet 4",
-		TotalTokens: 10500,
-		TotalCost:   0.1234,
-		StartTime:   time.Now(),
+		ProjectName:  "my-project",
+		ModelName:    "Sonnet 4",
+		TotalTokens:  10500,
+		InputTokens:  7000,
+		OutputTokens: 3500,
+		TotalCost:    0.1234,
+		StartTime:    time.Now(),
 	}
 
 	tests := []struct {
@@ -469,7 +581,7 @@ func TestBuildStateLine(t *testing.T) {
 		})
 	}
 
-	t.Run("cost in tooltip excludes cost from state", func(t *testing.T) {
+	t.Run("cost in details excludes cost from state", func(t *testing.T) {
 		cfg := DefaultConfig()
 		cfg.Show.CostInDetails = boolPtr(true)
 		got := buildStateLine(session, cfg)
@@ -478,15 +590,170 @@ func TestBuildStateLine(t *testing.T) {
 		}
 	})
 
-	t.Run("empty model name with model shown", func(t *testing.T) {
-		noModelSession := &SessionData{
-			TotalTokens: 5000,
-			TotalCost:   0.05,
+	t.Run("split tokens enabled", func(t *testing.T) {
+		cfg := DefaultConfig()
+		cfg.Show.SplitTokens = boolPtr(true)
+		cfg.Show.Cost = boolPtr(false)
+		got := buildStateLine(session, cfg)
+		if got != "Sonnet 4 | 7.0K in | 3.5K out" {
+			t.Errorf("split tokens should show in/out, got %q", got)
 		}
+	})
+
+	t.Run("split tokens disabled shows total", func(t *testing.T) {
+		cfg := DefaultConfig()
+		cfg.Show.Cost = boolPtr(false)
+		got := buildStateLine(session, cfg)
+		if got != "Sonnet 4 | 10.5K tokens" {
+			t.Errorf("non-split should show total, got %q", got)
+		}
+	})
+
+	t.Run("empty model name with model shown", func(t *testing.T) {
+		noModelSession := &SessionData{TotalTokens: 5000, TotalCost: 0.05}
 		cfg := DefaultConfig()
 		got := buildStateLine(noModelSession, cfg)
 		if got != "5.0K tokens | $0.0500" {
 			t.Errorf("empty model should be omitted, got %q", got)
+		}
+	})
+}
+
+func TestFormatTemplate(t *testing.T) {
+	session := &SessionData{
+		ProjectName:  "my-project",
+		GitBranch:    "main",
+		ModelName:    "Sonnet 4",
+		TotalTokens:  200000,
+		InputTokens:  150000,
+		OutputTokens: 50000,
+		TotalCost:    0.1234,
+		StartTime:    time.Now(),
+	}
+
+	tests := []struct {
+		name     string
+		template string
+		want     string
+	}{
+		{"project only", "{project}", "my-project"},
+		{"project and branch", "{project} ({branch})", "my-project (main)"},
+		{"model and tokens", "{model} | {tokens}", "Sonnet 4 | 200.0K"},
+		{"split tokens", "{in_tokens} in | {out_tokens} out", "150.0K in | 50.0K out"},
+		{"cost with dollar", "${cost}", "$0.1234"},
+		{"separator variable", "{model}{separator}{tokens}", "Sonnet 4 | 200.0K"},
+		{"plain text", "Just coding", "Just coding"},
+		{"unknown variable", "{unknown} var", "{unknown} var"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := DefaultConfig()
+			got := formatTemplate(tt.template, session, cfg)
+			if got != tt.want {
+				t.Errorf("formatTemplate(%q) = %q, want %q", tt.template, got, tt.want)
+			}
+		})
+	}
+
+	t.Run("custom cost precision", func(t *testing.T) {
+		cfg := DefaultConfig()
+		cfg.Display.CostPrecision = intPtr(2)
+		got := formatTemplate("${cost}", session, cfg)
+		if got != "$0.12" {
+			t.Errorf("expected $0.12, got %q", got)
+		}
+	})
+
+	t.Run("truncation at 128 chars", func(t *testing.T) {
+		cfg := DefaultConfig()
+		got := formatTemplate(strings.Repeat("a", 200), session, cfg)
+		if len(got) != 128 {
+			t.Errorf("expected 128 chars, got %d", len(got))
+		}
+	})
+}
+
+func TestSessionDataChanged(t *testing.T) {
+	base := &SessionData{
+		ProjectName: "proj",
+		ModelName:   "Sonnet 4",
+		GitBranch:   "main",
+		TotalTokens: 100,
+		TotalCost:   0.5,
+	}
+
+	t.Run("nil old is changed", func(t *testing.T) {
+		if !sessionDataChanged(nil, base) {
+			t.Error("nil old should be changed")
+		}
+	})
+
+	t.Run("same data not changed", func(t *testing.T) {
+		same := *base
+		if sessionDataChanged(base, &same) {
+			t.Error("same data should not be changed")
+		}
+	})
+
+	t.Run("different tokens is changed", func(t *testing.T) {
+		diff := *base
+		diff.TotalTokens = 200
+		if !sessionDataChanged(base, &diff) {
+			t.Error("different tokens should be changed")
+		}
+	})
+
+	t.Run("different cost is changed", func(t *testing.T) {
+		diff := *base
+		diff.TotalCost = 1.0
+		if !sessionDataChanged(base, &diff) {
+			t.Error("different cost should be changed")
+		}
+	})
+
+	t.Run("different project is changed", func(t *testing.T) {
+		diff := *base
+		diff.ProjectName = "other"
+		if !sessionDataChanged(base, &diff) {
+			t.Error("different project should be changed")
+		}
+	})
+}
+
+func TestCheckIdle(t *testing.T) {
+	base := &SessionData{TotalTokens: 100, TotalCost: 0.5, ProjectName: "p", ModelName: "m"}
+
+	t.Run("timeout 0 never idle", func(t *testing.T) {
+		idle, _ := checkIdle(base, base, time.Now().Add(-time.Hour), 0)
+		if idle {
+			t.Error("timeout 0 should never be idle")
+		}
+	})
+
+	t.Run("data changed resets idle", func(t *testing.T) {
+		changed := *base
+		changed.TotalTokens = 200
+		idle, newChange := checkIdle(base, &changed, time.Now().Add(-time.Hour), 10)
+		if idle {
+			t.Error("changed data should not be idle")
+		}
+		if time.Since(newChange) > time.Second {
+			t.Error("lastChange should be reset to now")
+		}
+	})
+
+	t.Run("no change within timeout not idle", func(t *testing.T) {
+		idle, _ := checkIdle(base, base, time.Now(), 60)
+		if idle {
+			t.Error("within timeout should not be idle")
+		}
+	})
+
+	t.Run("no change past timeout is idle", func(t *testing.T) {
+		idle, _ := checkIdle(base, base, time.Now().Add(-2*time.Minute), 60)
+		if !idle {
+			t.Error("past timeout should be idle")
 		}
 	})
 }
