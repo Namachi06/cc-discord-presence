@@ -157,6 +157,7 @@ You can customize which fields are displayed on Discord by creating a config fil
 | `show.model_name` | bool | `true` | Show Claude model in State line |
 | `show.tokens` | bool | `true` | Show token count in State line |
 | `show.cost` | bool | `true` | Show cost in State line |
+| `show.cost_in_tooltip` | bool | `false` | Move cost to icon tooltip (hover) instead of State line |
 | `show.duration` | bool | `true` | Show elapsed time |
 | `display.details_prefix` | string | `"Working on"` | Prefix before project/branch |
 | `display.separator` | string | `" \| "` | Separator between State parts |
