@@ -31,6 +31,7 @@ type ShowConfig struct {
 	Cost          *bool `json:"cost"`
 	CostInDetails *bool `json:"cost_in_details"`
 	Duration      *bool `json:"duration"`
+	SessionFocus  *bool `json:"session_focus"`
 }
 
 // DisplayConfig controls formatting and customization of the presence.
@@ -82,6 +83,7 @@ func DefaultConfig() *Config {
 			Cost:          boolPtr(true),
 			CostInDetails: boolPtr(false),
 			Duration:      boolPtr(true),
+			SessionFocus:  boolPtr(false),
 		},
 		Display: DisplayConfig{
 			DetailsPrefix: "Working on",
@@ -140,6 +142,9 @@ func mergeConfig(defaults, user *Config) *Config {
 	}
 	if user.Show.Duration != nil {
 		result.Show.Duration = user.Show.Duration
+	}
+	if user.Show.SessionFocus != nil {
+		result.Show.SessionFocus = user.Show.SessionFocus
 	}
 
 	// Display fields

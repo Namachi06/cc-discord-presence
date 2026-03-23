@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -559,5 +560,161 @@ func TestModelPricingConsistency(t *testing.T) {
 		if _, ok := modelPricing[modelID]; !ok {
 			t.Errorf("Model %q has display name but no pricing", modelID)
 		}
+	}
+}
+
+// writeTestSessionFile is a test helper that creates a per-session data file.
+func writeTestSessionFile(t *testing.T, dir, sessionID, projectDir, modelName string) {
+	t.Helper()
+	data := fmt.Sprintf(`{
+		"session_id": "%s",
+		"cwd": "/Users/test/%s",
+		"model": {"id": "test-model", "display_name": "%s"},
+		"workspace": {"project_dir": "/Users/test/%s"},
+		"cost": {"total_cost_usd": 1.23},
+		"context_window": {"total_input_tokens": 1000, "total_output_tokens": 500}
+	}`, sessionID, projectDir, modelName, projectDir)
+	path := filepath.Join(dir, "discord-presence-session-"+sessionID+".json")
+	if err := os.WriteFile(path, []byte(data), 0644); err != nil {
+		t.Fatalf("Failed to write session file: %v", err)
+	}
+}
+
+func TestStatusLineToSessionData(t *testing.T) {
+	sl := &StatusLineData{SessionID: "test-id", Cwd: "/Users/test/fallback"}
+	sl.Model.DisplayName = "Opus 4.5"
+	sl.Workspace.ProjectDir = "/Users/test/myproject"
+	sl.Cost.TotalCostUSD = 5.67
+	sl.ContextWindow.TotalInputTokens = 10000
+	sl.ContextWindow.TotalOutputTokens = 5000
+
+	startTime := time.Date(2025, 6, 1, 12, 0, 0, 0, time.UTC)
+	got := statusLineToSessionData(sl, startTime)
+
+	if got.ProjectName != "myproject" {
+		t.Errorf("ProjectName = %q, want %q", got.ProjectName, "myproject")
+	}
+	if got.ModelName != "Opus 4.5" {
+		t.Errorf("ModelName = %q, want %q", got.ModelName, "Opus 4.5")
+	}
+	if got.TotalTokens != 15000 {
+		t.Errorf("TotalTokens = %d, want 15000", got.TotalTokens)
+	}
+
+	// Test fallback to Cwd when ProjectDir is empty
+	sl.Workspace.ProjectDir = ""
+	got2 := statusLineToSessionData(sl, startTime)
+	if got2.ProjectName != "fallback" {
+		t.Errorf("ProjectName with empty ProjectDir = %q, want %q", got2.ProjectName, "fallback")
+	}
+}
+
+func TestReadSessionFile(t *testing.T) {
+	dir := t.TempDir()
+
+	t.Run("valid file", func(t *testing.T) {
+		path := filepath.Join(dir, "valid.json")
+		os.WriteFile(path, []byte(`{"session_id":"abc","model":{"display_name":"Opus 4.5"}}`), 0644)
+		sl, err := readSessionFile(path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if sl.SessionID != "abc" {
+			t.Errorf("SessionID = %q, want %q", sl.SessionID, "abc")
+		}
+	})
+
+	t.Run("invalid JSON", func(t *testing.T) {
+		path := filepath.Join(dir, "invalid.json")
+		os.WriteFile(path, []byte(`{broken`), 0644)
+		_, err := readSessionFile(path)
+		if err == nil {
+			t.Error("expected error for invalid JSON")
+		}
+	})
+
+	t.Run("empty session_id", func(t *testing.T) {
+		path := filepath.Join(dir, "empty-id.json")
+		os.WriteFile(path, []byte(`{"session_id":"","model":{}}`), 0644)
+		_, err := readSessionFile(path)
+		if err == nil {
+			t.Error("expected error for empty session_id")
+		}
+	})
+
+	t.Run("file not found", func(t *testing.T) {
+		_, err := readSessionFile(filepath.Join(dir, "nonexistent.json"))
+		if err == nil {
+			t.Error("expected error for missing file")
+		}
+	})
+}
+
+func TestReadFocusedSessionData(t *testing.T) {
+	origClaudeDir := claudeDir
+	defer func() { claudeDir = origClaudeDir }()
+
+	t.Run("no session files returns nil", func(t *testing.T) {
+		claudeDir = t.TempDir()
+		got := readFocusedSessionData()
+		if got != nil {
+			t.Errorf("expected nil, got %+v", got)
+		}
+	})
+
+	t.Run("single session file", func(t *testing.T) {
+		claudeDir = t.TempDir()
+		writeTestSessionFile(t, claudeDir, "sess-aaa", "project-a", "Opus 4.5")
+
+		got := readFocusedSessionData()
+		if got == nil {
+			t.Fatal("expected non-nil")
+		}
+		if got.ProjectName != "project-a" {
+			t.Errorf("ProjectName = %q, want %q", got.ProjectName, "project-a")
+		}
+	})
+
+	t.Run("two sessions picks most recent", func(t *testing.T) {
+		claudeDir = t.TempDir()
+
+		writeTestSessionFile(t, claudeDir, "sess-old", "project-old", "Sonnet 4")
+		oldPath := filepath.Join(claudeDir, "discord-presence-session-sess-old.json")
+		oldTime := time.Now().Add(-1 * time.Minute)
+		os.Chtimes(oldPath, oldTime, oldTime)
+
+		writeTestSessionFile(t, claudeDir, "sess-new", "project-new", "Opus 4.5")
+
+		got := readFocusedSessionData()
+		if got == nil {
+			t.Fatal("expected non-nil")
+		}
+		if got.ProjectName != "project-new" {
+			t.Errorf("should pick most recent, got %q", got.ProjectName)
+		}
+	})
+}
+
+func TestCleanupStaleSessions(t *testing.T) {
+	origClaudeDir := claudeDir
+	defer func() { claudeDir = origClaudeDir }()
+
+	claudeDir = t.TempDir()
+
+	writeTestSessionFile(t, claudeDir, "stale-sess", "old-project", "Sonnet 4")
+	stalePath := filepath.Join(claudeDir, "discord-presence-session-stale-sess.json")
+	staleTime := time.Now().Add(-15 * time.Minute)
+	os.Chtimes(stalePath, staleTime, staleTime)
+
+	writeTestSessionFile(t, claudeDir, "fresh-sess", "new-project", "Opus 4.5")
+	freshPath := filepath.Join(claudeDir, "discord-presence-session-fresh-sess.json")
+
+	cleanupStaleSessions()
+
+	if _, err := os.Stat(stalePath); !os.IsNotExist(err) {
+		t.Error("stale file should have been removed")
+	}
+	if _, err := os.Stat(freshPath); err != nil {
+		t.Error("fresh file should still exist")
 	}
 }

@@ -178,6 +178,31 @@ func main() {
 	watchForChanges()
 }
 
+// statusLineToSessionData converts StatusLineData to SessionData.
+func statusLineToSessionData(sl *StatusLineData, startTime time.Time) *SessionData {
+	projectPath := sl.Workspace.ProjectDir
+	if projectPath == "" {
+		projectPath = sl.Cwd
+	}
+
+	projectName := filepath.Base(projectPath)
+	if projectName == "" || projectName == "." {
+		projectName = "Unknown Project"
+	}
+
+	return &SessionData{
+		ProjectName:  projectName,
+		ProjectPath:  projectPath,
+		GitBranch:    getGitBranch(projectPath),
+		ModelName:    sl.Model.DisplayName,
+		InputTokens:  sl.ContextWindow.TotalInputTokens,
+		OutputTokens: sl.ContextWindow.TotalOutputTokens,
+		TotalTokens:  sl.ContextWindow.TotalInputTokens + sl.ContextWindow.TotalOutputTokens,
+		TotalCost:    sl.Cost.TotalCostUSD,
+		StartTime:    startTime,
+	}
+}
+
 func readStatusLineData() *SessionData {
 	data, err := os.ReadFile(dataFilePath)
 	if err != nil {
@@ -193,26 +218,75 @@ func readStatusLineData() *SessionData {
 		return nil
 	}
 
-	projectPath := statusLine.Workspace.ProjectDir
-	if projectPath == "" {
-		projectPath = statusLine.Cwd
+	return statusLineToSessionData(&statusLine, sessionStartTime)
+}
+
+// sessionFilePattern returns the glob pattern for per-session data files.
+func sessionFilePattern() string {
+	return filepath.Join(claudeDir, "discord-presence-session-*.json")
+}
+
+// readSessionFile parses a per-session JSON file.
+func readSessionFile(path string) (*StatusLineData, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var statusLine StatusLineData
+	if err := json.Unmarshal(data, &statusLine); err != nil {
+		return nil, err
+	}
+	if statusLine.SessionID == "" {
+		return nil, fmt.Errorf("missing session_id")
+	}
+	return &statusLine, nil
+}
+
+// readFocusedSessionData reads the most recently modified per-session file.
+func readFocusedSessionData() *SessionData {
+	matches, err := filepath.Glob(sessionFilePattern())
+	if err != nil || len(matches) == 0 {
+		return nil
 	}
 
-	projectName := filepath.Base(projectPath)
-	if projectName == "" || projectName == "." {
-		projectName = "Unknown Project"
+	var newestPath string
+	var newestTime time.Time
+	for _, path := range matches {
+		info, err := os.Stat(path)
+		if err != nil {
+			continue
+		}
+		if info.ModTime().After(newestTime) {
+			newestTime = info.ModTime()
+			newestPath = path
+		}
 	}
 
-	return &SessionData{
-		ProjectName:  projectName,
-		ProjectPath:  projectPath,
-		GitBranch:    getGitBranch(projectPath),
-		ModelName:    statusLine.Model.DisplayName,
-		InputTokens:  statusLine.ContextWindow.TotalInputTokens,
-		OutputTokens: statusLine.ContextWindow.TotalOutputTokens,
-		TotalTokens:  statusLine.ContextWindow.TotalInputTokens + statusLine.ContextWindow.TotalOutputTokens,
-		TotalCost:    statusLine.Cost.TotalCostUSD,
-		StartTime:    sessionStartTime,
+	if newestPath == "" {
+		return nil
+	}
+
+	sl, err := readSessionFile(newestPath)
+	if err != nil {
+		return nil
+	}
+	return statusLineToSessionData(sl, sessionStartTime)
+}
+
+// cleanupStaleSessions removes per-session files not modified in the last 10 minutes.
+func cleanupStaleSessions() {
+	matches, err := filepath.Glob(sessionFilePattern())
+	if err != nil {
+		return
+	}
+	for _, path := range matches {
+		info, err := os.Stat(path)
+		if err != nil {
+			continue
+		}
+		if time.Since(info.ModTime()) > 10*time.Minute {
+			os.Remove(path)
+		}
 	}
 }
 
@@ -419,6 +493,18 @@ func formatModelName(modelID string) string {
 
 // readSessionData tries statusline data first, then falls back to JSONL parsing
 func readSessionData() *SessionData {
+	cfg := currentConfig
+
+	// Session focus mode: pick most recently active per-session file
+	if showFieldDefault(cfg.Show.SessionFocus, false) {
+		if data := readFocusedSessionData(); data != nil {
+			if usingFallback {
+				usingFallback = false
+			}
+			return data
+		}
+	}
+
 	// First try statusline data (most accurate)
 	if data := readStatusLineData(); data != nil {
 		if usingFallback {
@@ -566,6 +652,9 @@ func watchForChanges() {
 	ticker := time.NewTicker(PollInterval)
 	defer ticker.Stop()
 
+	cleanupTicker := time.NewTicker(5 * time.Minute)
+	defer cleanupTicker.Stop()
+
 	for {
 		select {
 		case event, ok := <-watcher.Events:
@@ -586,8 +675,8 @@ func watchForChanges() {
 					processSessionUpdate(session)
 				}
 			}
-			// Respond to statusline data file changes
-			if baseName == "discord-presence-data.json" {
+			// Respond to statusline data file changes (shared or per-session)
+			if baseName == "discord-presence-data.json" || strings.HasPrefix(baseName, "discord-presence-session-") {
 				if session := readSessionData(); session != nil {
 					processSessionUpdate(session)
 				}
@@ -602,6 +691,10 @@ func watchForChanges() {
 			if session := readSessionData(); session != nil {
 				processSessionUpdate(session)
 			}
+		case <-cleanupTicker.C:
+			if showFieldDefault(currentConfig.Show.SessionFocus, false) {
+				cleanupStaleSessions()
+			}
 		}
 	}
 }
@@ -610,9 +703,19 @@ func pollForChanges() {
 	ticker := time.NewTicker(PollInterval)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		if session := readSessionData(); session != nil {
-			processSessionUpdate(session)
+	cleanupTicker := time.NewTicker(5 * time.Minute)
+	defer cleanupTicker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			if session := readSessionData(); session != nil {
+				processSessionUpdate(session)
+			}
+		case <-cleanupTicker.C:
+			if showFieldDefault(currentConfig.Show.SessionFocus, false) {
+				cleanupStaleSessions()
+			}
 		}
 	}
 }

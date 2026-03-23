@@ -38,6 +38,9 @@ func TestDefaultConfig(t *testing.T) {
 	if showFieldDefault(cfg.Show.SplitTokens, false) {
 		t.Error("SplitTokens should default to false")
 	}
+	if showFieldDefault(cfg.Show.SessionFocus, false) {
+		t.Error("SessionFocus should default to false")
+	}
 
 	// Display defaults
 	if cfg.Display.DetailsPrefix != "Working on" {
@@ -187,7 +190,8 @@ func TestLoadConfig_FullConfig(t *testing.T) {
 			"tokens": false,
 			"split_tokens": true,
 			"cost": false,
-			"duration": true
+			"duration": true,
+			"session_focus": true
 		},
 		"display": {
 			"details_prefix": "Coding",
@@ -211,6 +215,9 @@ func TestLoadConfig_FullConfig(t *testing.T) {
 	}
 	if !showFieldDefault(cfg.Show.SplitTokens, false) {
 		t.Error("split_tokens should be true")
+	}
+	if !showFieldDefault(cfg.Show.SessionFocus, false) {
+		t.Error("session_focus should be true")
 	}
 	if cfg.Display.DetailsFormat != "{project}" {
 		t.Errorf("DetailsFormat = %q, want {project}", cfg.Display.DetailsFormat)

@@ -190,6 +190,7 @@ Available variables: `{project}`, `{branch}`, `{model}`, `{tokens}`, `{in_tokens
 | `display.separator` | string | `" \| "` | Separator between State parts |
 | `display.cost_precision` | int | `4` | Decimal places for cost (0-10) |
 | `display.idle_timeout` | int | `0` | Seconds before showing "Idle" (0 = disabled, max 3600) |
+| `show.session_focus` | bool | `false` | Display the most recently active session (requires statusline) |
 | `display.large_image` | string | `""` | Asset key for large icon (requires custom Discord app) |
 | `display.large_text` | string | `"Clawd Code - ..."` | Tooltip text on the large icon |
 | `display.discord_app_id` | string | `""` | Custom Discord Application ID |
