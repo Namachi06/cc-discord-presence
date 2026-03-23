@@ -41,6 +41,7 @@ type DisplayConfig struct {
 	Separator     string `json:"separator"`
 	CostPrecision *int   `json:"cost_precision"`
 	IdleTimeout   *int   `json:"idle_timeout"`
+	LargeImage    string `json:"large_image"`
 	LargeText     string `json:"large_text"`
 	DiscordAppID  string `json:"discord_app_id"`
 }
@@ -173,6 +174,9 @@ func mergeConfig(defaults, user *Config) *Config {
 			t = 3600
 		}
 		result.Display.IdleTimeout = intPtr(t)
+	}
+	if user.Display.LargeImage != "" {
+		result.Display.LargeImage = user.Display.LargeImage
 	}
 	if user.Display.LargeText != "" {
 		result.Display.LargeText = user.Display.LargeText

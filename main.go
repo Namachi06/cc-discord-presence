@@ -517,9 +517,10 @@ func updatePresence(session *SessionData) {
 	}
 
 	activity := discord.Activity{
-		Details:   details,
-		State:     state,
-		LargeText: cfg.Display.LargeText,
+		Details:    details,
+		State:      state,
+		LargeImage: cfg.Display.LargeImage,
+		LargeText:  cfg.Display.LargeText,
 	}
 	if showField(cfg.Show.Duration) {
 		activity.StartTime = &session.StartTime
