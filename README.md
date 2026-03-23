@@ -110,6 +110,64 @@ You'll see one of:
 - `✓ Found active session: project-name (using statusline data)` - Best accuracy
 - `✓ Found active session: project-name (using JSONL fallback)` - Working, but consider setting up statusline
 
+## Configuration
+
+You can customize which fields are displayed on Discord by creating a config file at `~/.claude/discord-presence.json`.
+
+**All fields are optional** — if the file doesn't exist or a field is omitted, defaults are used (everything visible).
+
+### Minimal Example (hide git branch)
+
+```json
+{
+  "show": {
+    "git_branch": false
+  }
+}
+```
+
+### Full Example
+
+```json
+{
+  "show": {
+    "project_name": true,
+    "git_branch": false,
+    "model_name": true,
+    "tokens": true,
+    "cost": false,
+    "duration": true
+  },
+  "display": {
+    "details_prefix": "Coding",
+    "separator": " - ",
+    "cost_precision": 2,
+    "large_text": "My Custom Presence Text",
+    "discord_app_id": "YOUR_APP_ID"
+  }
+}
+```
+
+### Field Reference
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `show.project_name` | bool | `true` | Show project name in Details line |
+| `show.git_branch` | bool | `true` | Show git branch in Details line |
+| `show.model_name` | bool | `true` | Show Claude model in State line |
+| `show.tokens` | bool | `true` | Show token count in State line |
+| `show.cost` | bool | `true` | Show cost in State line |
+| `show.duration` | bool | `true` | Show elapsed time |
+| `display.details_prefix` | string | `"Working on"` | Prefix before project/branch |
+| `display.separator` | string | `" \| "` | Separator between State parts |
+| `display.cost_precision` | int | `4` | Decimal places for cost (0-10) |
+| `display.large_text` | string | `"Clawd Code - ..."` | Tooltip text on the large icon |
+| `display.discord_app_id` | string | `""` | Custom Discord Application ID |
+
+> **Live reload**: Changes to the config file are picked up automatically — no need to restart the daemon.
+>
+> **Note**: Changing `discord_app_id` requires a daemon restart.
+
 ## Discord Presence Display
 
 ```
@@ -161,8 +219,15 @@ By default, this uses a shared Discord application ("Clawd Code"). If you want t
 2. Click "New Application" and name it
    > ⚠️ **Note**: Discord blocks trademarked names like "Claude Code"
 3. Set an app icon in "General Information" (this appears in Rich Presence)
-4. Copy the **Application ID** and update `ClientID` in `main.go`
-5. Rebuild the binary
+4. Copy the **Application ID** and set it in your config file:
+   ```json
+   {
+     "display": {
+       "discord_app_id": "YOUR_APPLICATION_ID"
+     }
+   }
+   ```
+5. Restart the daemon
 
 ## Uninstallation
 

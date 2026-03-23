@@ -110,6 +110,7 @@ func init() {
 	claudeDir = filepath.Join(home, ".claude")
 	projectsDir = filepath.Join(claudeDir, "projects")
 	dataFilePath = filepath.Join(claudeDir, "discord-presence-data.json")
+	configFilePath = filepath.Join(claudeDir, "discord-presence.json")
 }
 
 func main() {
@@ -119,9 +120,20 @@ func main() {
 ║     Show your Claude Code session on Discord!             ║
 ╚═══════════════════════════════════════════════════════════╝`)
 
+	// Load configuration
+	currentConfig = LoadConfig()
+	fmt.Println("✓ Configuration loaded")
+
+	// Determine client ID (allow custom Discord App ID)
+	clientID := ClientID
+	if currentConfig.Display.DiscordAppID != "" {
+		clientID = currentConfig.Display.DiscordAppID
+		fmt.Printf("  Using custom Discord App ID: %s\n", clientID)
+	}
+
 	// Connect to Discord
 	fmt.Println("🔗 Connecting to Discord...")
-	discordClient = discord.NewClient(ClientID)
+	discordClient = discord.NewClient(clientID)
 	if err := discordClient.Connect(); err != nil {
 		fmt.Fprintf(os.Stderr, "❌ Failed to connect to Discord: %v\n", err)
 		fmt.Fprintln(os.Stderr, "   Make sure Discord is running and try again.")
@@ -421,24 +433,20 @@ func readSessionData() *SessionData {
 }
 
 func updatePresence(session *SessionData) {
-	// Build details line with prefix
-	details := fmt.Sprintf("Working on: %s", session.ProjectName)
-	if session.GitBranch != "" {
-		details = fmt.Sprintf("Working on: %s (%s)", session.ProjectName, session.GitBranch)
-	}
+	cfg := currentConfig
+	details := buildDetailsLine(session, cfg)
+	state := buildStateLine(session, cfg)
 
-	// Build state line: model | tokens | cost
-	state := fmt.Sprintf("%s | %s tokens | $%.4f",
-		session.ModelName,
-		formatNumber(session.TotalTokens),
-		session.TotalCost)
-
-	if err := discordClient.SetActivity(discord.Activity{
+	activity := discord.Activity{
 		Details:   details,
 		State:     state,
-		LargeText: "Clawd Code - Discord Rich Presence for Claude Code",
-		StartTime: &session.StartTime,
-	}); err != nil {
+		LargeText: cfg.Display.LargeText,
+	}
+	if showField(cfg.Show.Duration) {
+		activity.StartTime = &session.StartTime
+	}
+
+	if err := discordClient.SetActivity(activity); err != nil {
 		fmt.Fprintf(os.Stderr, "Error updating presence: %v\n", err)
 	}
 }
@@ -478,8 +486,22 @@ func watchForChanges() {
 			if !ok {
 				return
 			}
+			baseName := filepath.Base(event.Name)
+			// Respond to config file changes
+			if baseName == "discord-presence.json" {
+				newConfig := LoadConfig()
+				oldAppID := currentConfig.Display.DiscordAppID
+				currentConfig = newConfig
+				fmt.Println("✓ Configuration reloaded")
+				if newConfig.Display.DiscordAppID != oldAppID {
+					fmt.Println("⚠ discord_app_id change requires restart to take effect")
+				}
+				if session := readSessionData(); session != nil {
+					updatePresence(session)
+				}
+			}
 			// Respond to statusline data file changes
-			if filepath.Base(event.Name) == "discord-presence-data.json" {
+			if baseName == "discord-presence-data.json" {
 				if session := readSessionData(); session != nil {
 					updatePresence(session)
 				}

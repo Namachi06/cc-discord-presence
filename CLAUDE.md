@@ -16,6 +16,8 @@
 ```
 cc-discord-presence/
 ├── main.go               # Main entry - session tracking, data parsing, presence updates
+├── config.go             # Configuration system - loading, merging, presence builders
+├── config_test.go        # Tests for configuration system
 ├── discord/
 │   ├── client.go         # Discord IPC client, Conn interface, presence logic
 │   ├── conn_unix.go      # Unix socket connection (macOS/Linux)
@@ -90,8 +92,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. Key points:
 
 ## Configuration
 
-- Client ID `1455326944060248250` is hardcoded (shared "Clawd Code" Discord app)
-- App icon set in Discord Developer Portal (used automatically for Rich Presence)
+- User config file: `~/.claude/discord-presence.json` (optional, live-reloaded)
+- Config structs and loading logic in `config.go`
+- Supports toggling visibility of each field (project, branch, model, tokens, cost, duration)
+- Supports display customization (prefix, separator, cost precision, large text, custom app ID)
+- Client ID `1455326944060248250` is the default (shared "Clawd Code" Discord app), overridable via config
 
 ## Important Notes
 
