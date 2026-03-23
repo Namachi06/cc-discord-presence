@@ -20,7 +20,7 @@ type ShowConfig struct {
 	ModelName     *bool `json:"model_name"`
 	Tokens        *bool `json:"tokens"`
 	Cost          *bool `json:"cost"`
-	CostInTooltip *bool `json:"cost_in_tooltip"`
+	CostInDetails *bool `json:"cost_in_details"`
 	Duration      *bool `json:"duration"`
 }
 
@@ -58,7 +58,7 @@ func DefaultConfig() *Config {
 			ModelName:   boolPtr(true),
 			Tokens:      boolPtr(true),
 			Cost:          boolPtr(true),
-			CostInTooltip: boolPtr(false),
+			CostInDetails: boolPtr(false),
 			Duration:      boolPtr(true),
 		},
 		Display: DisplayConfig{
@@ -108,8 +108,8 @@ func mergeConfig(defaults, user *Config) *Config {
 	if user.Show.Cost != nil {
 		result.Show.Cost = user.Show.Cost
 	}
-	if user.Show.CostInTooltip != nil {
-		result.Show.CostInTooltip = user.Show.CostInTooltip
+	if user.Show.CostInDetails != nil {
+		result.Show.CostInDetails = user.Show.CostInDetails
 	}
 	if user.Show.Duration != nil {
 		result.Show.Duration = user.Show.Duration
@@ -151,14 +151,26 @@ func buildDetailsLine(session *SessionData, cfg *Config) string {
 	}
 
 	prefix := cfg.Display.DetailsPrefix
+	var base string
 
 	if showProject && showBranch {
-		return truncate(fmt.Sprintf("%s: %s (%s)", prefix, session.ProjectName, session.GitBranch), 128)
+		base = fmt.Sprintf("%s: %s (%s)", prefix, session.ProjectName, session.GitBranch)
+	} else if showProject {
+		base = fmt.Sprintf("%s: %s", prefix, session.ProjectName)
+	} else {
+		base = fmt.Sprintf("%s: %s", prefix, session.GitBranch)
 	}
-	if showProject {
-		return truncate(fmt.Sprintf("%s: %s", prefix, session.ProjectName), 128)
+
+	// Append cost to Details line when cost_in_details is enabled
+	if showField(cfg.Show.Cost) && showField(cfg.Show.CostInDetails) {
+		precision := 4
+		if cfg.Display.CostPrecision != nil {
+			precision = *cfg.Display.CostPrecision
+		}
+		base = fmt.Sprintf("%s | $%.*f", base, precision, session.TotalCost)
 	}
-	return truncate(fmt.Sprintf("%s: %s", prefix, session.GitBranch), 128)
+
+	return truncate(base, 128)
 }
 
 // buildStateLine constructs the State field for Discord presence.
@@ -177,24 +189,11 @@ func buildStateLine(session *SessionData, cfg *Config) string {
 	if showField(cfg.Show.Tokens) {
 		parts = append(parts, fmt.Sprintf("%s tokens", formatNumber(session.TotalTokens)))
 	}
-	if showField(cfg.Show.Cost) && !showField(cfg.Show.CostInTooltip) {
+	if showField(cfg.Show.Cost) && !showField(cfg.Show.CostInDetails) {
 		parts = append(parts, fmt.Sprintf("$%.*f", precision, session.TotalCost))
 	}
 
 	return truncate(strings.Join(parts, sep), 128)
-}
-
-// buildLargeText constructs the tooltip text, optionally including cost.
-func buildLargeText(session *SessionData, cfg *Config) string {
-	base := cfg.Display.LargeText
-	if showField(cfg.Show.Cost) && showField(cfg.Show.CostInTooltip) {
-		precision := 4
-		if cfg.Display.CostPrecision != nil {
-			precision = *cfg.Display.CostPrecision
-		}
-		return fmt.Sprintf("%s — $%.*f", base, precision, session.TotalCost)
-	}
-	return base
 }
 
 // truncate shortens a string to maxLen, appending "..." if truncated.

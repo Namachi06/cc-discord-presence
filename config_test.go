@@ -29,8 +29,8 @@ func TestDefaultConfig(t *testing.T) {
 	if !showField(cfg.Show.Duration) {
 		t.Error("Duration should default to true")
 	}
-	if showField(cfg.Show.CostInTooltip) {
-		t.Error("CostInTooltip should default to false")
+	if showField(cfg.Show.CostInDetails) {
+		t.Error("CostInDetails should default to false")
 	}
 
 	// Display defaults
@@ -350,6 +350,21 @@ func TestBuildDetailsLine(t *testing.T) {
 		}
 	})
 
+	t.Run("cost in details when cost_in_tooltip", func(t *testing.T) {
+		costSession := &SessionData{
+			ProjectName: "my-project",
+			GitBranch:   "main",
+			TotalCost:   21.89,
+		}
+		cfg := DefaultConfig()
+		cfg.Show.CostInDetails = boolPtr(true)
+		cfg.Display.CostPrecision = intPtr(2)
+		got := buildDetailsLine(costSession, cfg)
+		if got != "Working on: my-project (main) | $21.89" {
+			t.Errorf("cost should be in details, got %q", got)
+		}
+	})
+
 	t.Run("project hidden branch empty", func(t *testing.T) {
 		noBranchSession := &SessionData{
 			ProjectName: "my-project",
@@ -456,10 +471,10 @@ func TestBuildStateLine(t *testing.T) {
 
 	t.Run("cost in tooltip excludes cost from state", func(t *testing.T) {
 		cfg := DefaultConfig()
-		cfg.Show.CostInTooltip = boolPtr(true)
+		cfg.Show.CostInDetails = boolPtr(true)
 		got := buildStateLine(session, cfg)
 		if got != "Sonnet 4 | 10.5K tokens" {
-			t.Errorf("cost_in_tooltip should exclude cost, got %q", got)
+			t.Errorf("cost_in_details should exclude cost from state, got %q", got)
 		}
 	})
 
@@ -472,40 +487,6 @@ func TestBuildStateLine(t *testing.T) {
 		got := buildStateLine(noModelSession, cfg)
 		if got != "5.0K tokens | $0.0500" {
 			t.Errorf("empty model should be omitted, got %q", got)
-		}
-	})
-}
-
-func TestBuildLargeText(t *testing.T) {
-	session := &SessionData{
-		TotalCost: 0.49,
-	}
-
-	t.Run("default no cost in tooltip", func(t *testing.T) {
-		cfg := DefaultConfig()
-		got := buildLargeText(session, cfg)
-		if got != "Clawd Code - Discord Rich Presence for Claude Code" {
-			t.Errorf("default should be base text, got %q", got)
-		}
-	})
-
-	t.Run("cost in tooltip", func(t *testing.T) {
-		cfg := DefaultConfig()
-		cfg.Show.CostInTooltip = boolPtr(true)
-		cfg.Display.CostPrecision = intPtr(2)
-		got := buildLargeText(session, cfg)
-		if got != "Clawd Code - Discord Rich Presence for Claude Code — $0.49" {
-			t.Errorf("should include cost, got %q", got)
-		}
-	})
-
-	t.Run("cost disabled ignores tooltip", func(t *testing.T) {
-		cfg := DefaultConfig()
-		cfg.Show.Cost = boolPtr(false)
-		cfg.Show.CostInTooltip = boolPtr(true)
-		got := buildLargeText(session, cfg)
-		if got != "Clawd Code - Discord Rich Presence for Claude Code" {
-			t.Errorf("cost disabled should not show in tooltip, got %q", got)
 		}
 	})
 }
