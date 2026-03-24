@@ -12,6 +12,33 @@ Discord Rich Presence for Claude Code. Show your coding session on Discord in re
 └─────────────────────────────────────┘
 ```
 
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [Features](#features)
+- [Configuration](#configuration)
+  - [Examples](#examples)
+  - [Format Templates](#format-templates)
+  - [Field Reference](#field-reference)
+- [Data Sources](#data-sources)
+  - [Statusline Setup](#statusline-setup)
+  - [Verify Your Data Source](#verify-your-data-source)
+- [Advanced Features](#advanced-features)
+  - [Idle Detection](#idle-detection)
+  - [Session Focus](#session-focus)
+  - [Discord Buttons](#discord-buttons)
+  - [Custom Discord App](#custom-discord-app)
+- [Token Pricing](#token-pricing)
+- [Platform Support](#platform-support)
+- [Troubleshooting](#troubleshooting)
+- [File Paths](#file-paths)
+- [Building from Source](#building-from-source)
+- [Uninstallation](#uninstallation)
+- [Privacy](#privacy)
+- [Contributing](#contributing)
+- [License](#license)
+- [Acknowledgments](#acknowledgments)
+
 ## Quick Start
 
 1. Open Discord desktop app
