@@ -25,6 +25,10 @@ Discord Rich Presence for Claude Code. Show your coding session on Discord in re
   - [Verify Your Data Source](#verify-your-data-source)
 - [Advanced Features](#advanced-features)
   - [Idle Detection](#idle-detection)
+  - [Auto-disable on Extended Idle](#auto-disable-on-extended-idle)
+  - [Privacy Mode](#privacy-mode)
+  - [Cost Alert](#cost-alert)
+  - [Model Icons](#model-icons)
   - [Session Focus](#session-focus)
   - [Discord Buttons](#discord-buttons)
   - [Custom Discord App](#custom-discord-app)
@@ -166,6 +170,7 @@ Set `details_format` or `state_format` to override the `show.*` system entirely 
 | `cost_in_details` | `false` | Details | Move cost from State to Details line |
 | `duration` | `true` | Timer | Elapsed time |
 | `session_focus` | `false` | Behavior | Display most recently active session (requires statusline) |
+| `privacy_mode` | `false` | Behavior | Show only "Using Claude Code" with no session details |
 
 **How it looks:**
 
@@ -177,6 +182,9 @@ Set `details_format` or `state_format` to override the `show.*` system entirely 
 | `separator` | `" \| "` | Separator between State fields |
 | `cost_precision` | `4` | Decimal places for cost (0-10) |
 | `idle_timeout` | `0` | Seconds before showing "Idle" (0 = disabled, max 3600) |
+| `idle_disable` | `0` | Seconds of idle before clearing presence entirely (0 = disabled, max 86400) |
+| `cost_alert` | `0` | Cost threshold to prepend ⚠ warning (0 = disabled) |
+| `model_icons` | `{}` | Map of model keyword to Discord asset key (requires custom app) |
 | `large_image` | `""` | Asset key for icon (requires custom Discord app) |
 | `large_text` | `"Clawd Code - ..."` | Tooltip on icon hover (requires `large_image`) |
 | `discord_app_id` | `""` | Custom Discord Application ID |
@@ -252,6 +260,56 @@ When `idle_timeout` is set, the State line changes to **"Idle"** if no session a
 ```
 
 Set to `0` to disable. Maximum: `3600` seconds (1 hour).
+
+### Auto-disable on Extended Idle
+
+When `idle_disable` is set, the presence is **completely cleared** from Discord after being idle for the specified duration. Re-enables automatically when activity resumes. The timer starts when idle begins (after `idle_timeout`).
+
+```json
+{"display": {"idle_timeout": 300, "idle_disable": 5400}}
+```
+
+Example: 5 min inactivity → "Idle" → after 1h30 more → presence disappears → activity resumes → presence reappears.
+
+Requires `idle_timeout` to be set (otherwise the session never goes idle).
+
+### Privacy Mode
+
+Hide all session details. Only shows "Using Claude Code" with elapsed time. No project name, tokens, cost, or model visible. Buttons and icon are preserved.
+
+```json
+{"show": {"privacy_mode": true}}
+```
+
+Toggle via live reload — useful during screen shares or meetings.
+
+### Cost Alert
+
+Prepend a ⚠ warning to the State line when session cost exceeds a threshold.
+
+```json
+{"display": {"cost_alert": 50}}
+```
+
+Suppressed when idle or in privacy mode. Set to `0` to disable.
+
+### Model Icons
+
+Display a model-specific small icon in the corner of the presence. Requires a custom Discord app with uploaded assets.
+
+```json
+{
+  "display": {
+    "model_icons": {
+      "opus": "icon-opus",
+      "sonnet": "icon-sonnet",
+      "haiku": "icon-haiku"
+    }
+  }
+}
+```
+
+Matches model name by case-insensitive substring. Suppressed in privacy mode.
 
 ### Session Focus
 
