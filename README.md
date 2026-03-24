@@ -6,7 +6,7 @@ Discord Rich Presence for Claude Code. Show your coding session on Discord in re
 ┌─────────────────────────────────────┐
 │ Coding...                           │  App name (customizable)
 │ Working on: my-project (main)       │  details_prefix, project_name, git_branch
-│ Opus 4.5 | 1.5M tokens | $0.12     │  model_name, tokens, cost
+│ Opus 4.5 | 1.5M tokens | $0.12      │  model_name, tokens, cost
 │ 00:45:30 elapsed                    │  duration
 │ [GitHub] [Portfolio]                │  buttons (visible to others only)
 └─────────────────────────────────────┘
