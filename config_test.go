@@ -41,8 +41,20 @@ func TestDefaultConfig(t *testing.T) {
 	if showFieldDefault(cfg.Show.SessionFocus, false) {
 		t.Error("SessionFocus should default to false")
 	}
+	if showFieldDefault(cfg.Show.PrivacyMode, false) {
+		t.Error("PrivacyMode should default to false")
+	}
 
 	// Display defaults
+	if cfg.Display.CostAlert != nil {
+		t.Error("CostAlert should default to nil")
+	}
+	if cfg.Display.IdleDisable != nil {
+		t.Error("IdleDisable should default to nil")
+	}
+	if cfg.Display.ModelIcons != nil {
+		t.Error("ModelIcons should default to nil")
+	}
 	if cfg.Display.DetailsPrefix != "Working on" {
 		t.Errorf("DetailsPrefix = %q, want %q", cfg.Display.DetailsPrefix, "Working on")
 	}
@@ -761,6 +773,189 @@ func TestCheckIdle(t *testing.T) {
 		idle, _ := checkIdle(base, base, time.Now().Add(-2*time.Minute), 60)
 		if !idle {
 			t.Error("past timeout should be idle")
+		}
+	})
+}
+
+func TestApplyCostAlert(t *testing.T) {
+	tests := []struct {
+		name      string
+		state     string
+		cost      float64
+		threshold *float64
+		idle      bool
+		privacy   bool
+		want      string
+	}{
+		{"nil threshold", "Sonnet 4 | $10", 10, nil, false, false, "Sonnet 4 | $10"},
+		{"below threshold", "Sonnet 4 | $10", 10, float64Ptr(50), false, false, "Sonnet 4 | $10"},
+		{"at threshold", "Sonnet 4 | $50", 50, float64Ptr(50), false, false, "\u26a0 Sonnet 4 | $50"},
+		{"above threshold", "Sonnet 4 | $100", 100, float64Ptr(50), false, false, "\u26a0 Sonnet 4 | $100"},
+		{"idle suppresses", "Idle", 100, float64Ptr(50), true, false, "Idle"},
+		{"privacy suppresses", "", 100, float64Ptr(50), false, true, ""},
+		{"zero threshold disabled", "Sonnet 4 | $100", 100, float64Ptr(0), false, false, "Sonnet 4 | $100"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := applyCostAlert(tt.state, tt.cost, tt.threshold, tt.idle, tt.privacy)
+			if got != tt.want {
+				t.Errorf("applyCostAlert() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMatchModelIcon(t *testing.T) {
+	icons := map[string]string{
+		"opus":   "icon-opus",
+		"sonnet": "icon-sonnet",
+		"haiku":  "icon-haiku",
+	}
+
+	tests := []struct {
+		name      string
+		modelName string
+		icons     map[string]string
+		wantIcon  string
+		wantFound bool
+	}{
+		{"opus match", "Opus 4.5", icons, "icon-opus", true},
+		{"sonnet match", "Sonnet 4", icons, "icon-sonnet", true},
+		{"haiku match", "Haiku 4.5", icons, "icon-haiku", true},
+		{"case insensitive", "OPUS 4.5", icons, "icon-opus", true},
+		{"full display name", "Opus 4.6 (1M context)", icons, "icon-opus", true},
+		{"no match", "Claude", icons, "", false},
+		{"empty model", "", icons, "", false},
+		{"nil icons", "Opus 4.5", nil, "", false},
+		{"empty icons", "Opus 4.5", map[string]string{}, "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			icon, found := matchModelIcon(tt.modelName, tt.icons)
+			if found != tt.wantFound {
+				t.Errorf("found = %v, want %v", found, tt.wantFound)
+			}
+			if icon != tt.wantIcon {
+				t.Errorf("icon = %q, want %q", icon, tt.wantIcon)
+			}
+		})
+	}
+}
+
+func TestCheckIdleDisable(t *testing.T) {
+	t.Run("disabled when 0", func(t *testing.T) {
+		if checkIdleDisable(true, time.Now().Add(-time.Hour), 0) {
+			t.Error("should not disable when secs=0")
+		}
+	})
+
+	t.Run("not idle", func(t *testing.T) {
+		if checkIdleDisable(false, time.Now().Add(-time.Hour), 3600) {
+			t.Error("should not disable when not idle")
+		}
+	})
+
+	t.Run("idle below threshold", func(t *testing.T) {
+		if checkIdleDisable(true, time.Now(), 3600) {
+			t.Error("should not disable when idle less than threshold")
+		}
+	})
+
+	t.Run("idle above threshold", func(t *testing.T) {
+		if !checkIdleDisable(true, time.Now().Add(-2*time.Hour), 3600) {
+			t.Error("should disable when idle exceeds threshold")
+		}
+	})
+
+	t.Run("zero idleStart", func(t *testing.T) {
+		if checkIdleDisable(true, time.Time{}, 3600) {
+			t.Error("should not disable with zero idleStart")
+		}
+	})
+}
+
+func TestCostAlertClamp(t *testing.T) {
+	defaults := DefaultConfig()
+
+	t.Run("negative clamped to 0", func(t *testing.T) {
+		user := &Config{Display: DisplayConfig{CostAlert: float64Ptr(-5)}}
+		result := mergeConfig(defaults, user)
+		if *result.Display.CostAlert != 0 {
+			t.Errorf("expected 0, got %f", *result.Display.CostAlert)
+		}
+	})
+
+	t.Run("valid value kept", func(t *testing.T) {
+		user := &Config{Display: DisplayConfig{CostAlert: float64Ptr(50)}}
+		result := mergeConfig(defaults, user)
+		if *result.Display.CostAlert != 50 {
+			t.Errorf("expected 50, got %f", *result.Display.CostAlert)
+		}
+	})
+
+	t.Run("over max clamped", func(t *testing.T) {
+		user := &Config{Display: DisplayConfig{CostAlert: float64Ptr(999999)}}
+		result := mergeConfig(defaults, user)
+		if *result.Display.CostAlert != 100000 {
+			t.Errorf("expected 100000, got %f", *result.Display.CostAlert)
+		}
+	})
+}
+
+func TestIdleDisableClamp(t *testing.T) {
+	defaults := DefaultConfig()
+
+	t.Run("negative clamped to 0", func(t *testing.T) {
+		user := &Config{Display: DisplayConfig{IdleDisable: intPtr(-10)}}
+		result := mergeConfig(defaults, user)
+		if *result.Display.IdleDisable != 0 {
+			t.Errorf("expected 0, got %d", *result.Display.IdleDisable)
+		}
+	})
+
+	t.Run("over 86400 clamped", func(t *testing.T) {
+		user := &Config{Display: DisplayConfig{IdleDisable: intPtr(100000)}}
+		result := mergeConfig(defaults, user)
+		if *result.Display.IdleDisable != 86400 {
+			t.Errorf("expected 86400, got %d", *result.Display.IdleDisable)
+		}
+	})
+
+	t.Run("valid value kept", func(t *testing.T) {
+		user := &Config{Display: DisplayConfig{IdleDisable: intPtr(3600)}}
+		result := mergeConfig(defaults, user)
+		if *result.Display.IdleDisable != 3600 {
+			t.Errorf("expected 3600, got %d", *result.Display.IdleDisable)
+		}
+	})
+}
+
+func TestModelIconsMerge(t *testing.T) {
+	defaults := DefaultConfig()
+
+	t.Run("nil by default", func(t *testing.T) {
+		if defaults.Display.ModelIcons != nil {
+			t.Error("ModelIcons should default to nil")
+		}
+	})
+
+	t.Run("user icons applied", func(t *testing.T) {
+		user := &Config{Display: DisplayConfig{
+			ModelIcons: map[string]string{"opus": "icon-opus"},
+		}}
+		result := mergeConfig(defaults, user)
+		if result.Display.ModelIcons["opus"] != "icon-opus" {
+			t.Error("opus icon not set correctly")
+		}
+	})
+
+	t.Run("empty map not applied", func(t *testing.T) {
+		user := &Config{Display: DisplayConfig{
+			ModelIcons: map[string]string{},
+		}}
+		result := mergeConfig(defaults, user)
+		if result.Display.ModelIcons != nil {
+			t.Error("empty map should not override defaults")
 		}
 	})
 }

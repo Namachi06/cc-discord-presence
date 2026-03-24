@@ -104,6 +104,8 @@ var (
 	lastSessionData  *SessionData
 	lastDataChange   time.Time
 	isIdle           bool
+	isDisabled       bool
+	idleStartTime    time.Time
 )
 
 func init() {
@@ -572,34 +574,68 @@ func processSessionUpdate(session *SessionData) {
 	isIdle, lastDataChange = checkIdle(lastSessionData, session, lastDataChange, idleTimeout)
 
 	if isIdle && !wasIdle {
+		idleStartTime = time.Now()
 		fmt.Println("💤 Session idle")
 	} else if !isIdle && wasIdle {
 		fmt.Println("🔄 Session active again")
+		if isDisabled {
+			isDisabled = false
+			fmt.Println("✅ Presence re-enabled")
+		}
+	}
+
+	// Auto-disable after extended idle
+	idleDisable := 0
+	if cfg.Display.IdleDisable != nil {
+		idleDisable = *cfg.Display.IdleDisable
+	}
+	if checkIdleDisable(isIdle, idleStartTime, idleDisable) {
+		if !isDisabled {
+			isDisabled = true
+			fmt.Println("🛑 Presence cleared (idle too long)")
+			clearPresence()
+		}
+		lastSessionData = session
+		return
 	}
 
 	lastSessionData = session
 	updatePresence(session)
 }
 
+func clearPresence() {
+	if err := discordClient.ClearActivity(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error clearing presence: %v\n", err)
+	}
+}
+
 func updatePresence(session *SessionData) {
 	cfg := currentConfig
+	privacy := showFieldDefault(cfg.Show.PrivacyMode, false)
 
 	var details, state string
 
-	if cfg.Display.DetailsFormat != "" {
-		details = formatTemplate(cfg.Display.DetailsFormat, session, cfg)
+	if privacy {
+		details = "Using Claude Code"
+		state = ""
 	} else {
-		details = buildDetailsLine(session, cfg)
-	}
+		if cfg.Display.DetailsFormat != "" {
+			details = formatTemplate(cfg.Display.DetailsFormat, session, cfg)
+		} else {
+			details = buildDetailsLine(session, cfg)
+		}
 
-	if cfg.Display.StateFormat != "" {
-		state = formatTemplate(cfg.Display.StateFormat, session, cfg)
-	} else {
-		state = buildStateLine(session, cfg)
-	}
+		if cfg.Display.StateFormat != "" {
+			state = formatTemplate(cfg.Display.StateFormat, session, cfg)
+		} else {
+			state = buildStateLine(session, cfg)
+		}
 
-	if isIdle {
-		state = "Idle"
+		if isIdle {
+			state = "Idle"
+		}
+
+		state = applyCostAlert(state, session.TotalCost, cfg.Display.CostAlert, isIdle, privacy)
 	}
 
 	activity := discord.Activity{
@@ -608,6 +644,15 @@ func updatePresence(session *SessionData) {
 		LargeImage: cfg.Display.LargeImage,
 		LargeText:  cfg.Display.LargeText,
 	}
+
+	// Model icons (suppressed in privacy mode)
+	if !privacy {
+		if icon, found := matchModelIcon(session.ModelName, cfg.Display.ModelIcons); found {
+			activity.SmallImage = icon
+			activity.SmallText = session.ModelName
+		}
+	}
+
 	if showField(cfg.Show.Duration) {
 		activity.StartTime = &session.StartTime
 	}

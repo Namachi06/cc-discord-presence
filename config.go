@@ -32,6 +32,7 @@ type ShowConfig struct {
 	CostInDetails *bool `json:"cost_in_details"`
 	Duration      *bool `json:"duration"`
 	SessionFocus  *bool `json:"session_focus"`
+	PrivacyMode   *bool `json:"privacy_mode"`
 }
 
 // DisplayConfig controls formatting and customization of the presence.
@@ -42,9 +43,12 @@ type DisplayConfig struct {
 	Separator     string `json:"separator"`
 	CostPrecision *int   `json:"cost_precision"`
 	IdleTimeout   *int   `json:"idle_timeout"`
-	LargeImage    string `json:"large_image"`
-	LargeText     string `json:"large_text"`
-	DiscordAppID  string `json:"discord_app_id"`
+	IdleDisable   *int                `json:"idle_disable"`
+	CostAlert     *float64            `json:"cost_alert"`
+	ModelIcons    map[string]string   `json:"model_icons"`
+	LargeImage    string              `json:"large_image"`
+	LargeText     string              `json:"large_text"`
+	DiscordAppID  string              `json:"discord_app_id"`
 }
 
 var (
@@ -52,8 +56,9 @@ var (
 	currentConfig  *Config
 )
 
-func boolPtr(b bool) *bool { return &b }
-func intPtr(i int) *int    { return &i }
+func boolPtr(b bool) *bool       { return &b }
+func intPtr(i int) *int          { return &i }
+func float64Ptr(f float64) *float64 { return &f }
 
 // showField safely dereferences a *bool, defaulting to true if nil.
 func showField(ptr *bool) bool {
@@ -146,6 +151,9 @@ func mergeConfig(defaults, user *Config) *Config {
 	if user.Show.SessionFocus != nil {
 		result.Show.SessionFocus = user.Show.SessionFocus
 	}
+	if user.Show.PrivacyMode != nil {
+		result.Show.PrivacyMode = user.Show.PrivacyMode
+	}
 
 	// Display fields
 	if user.Display.DetailsPrefix != "" {
@@ -179,6 +187,29 @@ func mergeConfig(defaults, user *Config) *Config {
 			t = 3600
 		}
 		result.Display.IdleTimeout = intPtr(t)
+	}
+	if user.Display.IdleDisable != nil {
+		d := *user.Display.IdleDisable
+		if d < 0 {
+			d = 0
+		}
+		if d > 86400 {
+			d = 86400
+		}
+		result.Display.IdleDisable = intPtr(d)
+	}
+	if user.Display.CostAlert != nil {
+		c := *user.Display.CostAlert
+		if c < 0 {
+			c = 0
+		}
+		if c > 100000 {
+			c = 100000
+		}
+		result.Display.CostAlert = float64Ptr(c)
+	}
+	if len(user.Display.ModelIcons) > 0 {
+		result.Display.ModelIcons = user.Display.ModelIcons
 	}
 	if user.Display.LargeImage != "" {
 		result.Display.LargeImage = user.Display.LargeImage
@@ -308,6 +339,39 @@ func formatTemplate(template string, session *SessionData, cfg *Config) string {
 	}
 
 	return truncate(result, 128)
+}
+
+// applyCostAlert prepends a warning symbol if cost exceeds the threshold.
+func applyCostAlert(state string, cost float64, threshold *float64, idle, privacy bool) string {
+	if idle || privacy || threshold == nil || *threshold <= 0 {
+		return state
+	}
+	if cost >= *threshold {
+		return truncate("\u26a0 "+state, 128)
+	}
+	return state
+}
+
+// matchModelIcon finds the matching icon key for a model name (case-insensitive substring).
+func matchModelIcon(modelName string, icons map[string]string) (string, bool) {
+	if len(icons) == 0 || modelName == "" {
+		return "", false
+	}
+	lower := strings.ToLower(modelName)
+	for key, iconKey := range icons {
+		if strings.Contains(lower, strings.ToLower(key)) {
+			return iconKey, true
+		}
+	}
+	return "", false
+}
+
+// checkIdleDisable returns true if presence should be disabled due to extended idle.
+func checkIdleDisable(idle bool, idleStart time.Time, secs int) bool {
+	if secs <= 0 || !idle || idleStart.IsZero() {
+		return false
+	}
+	return time.Since(idleStart) >= time.Duration(secs)*time.Second
 }
 
 // truncate shortens a string to maxLen, appending "..." if truncated.

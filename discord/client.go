@@ -143,6 +143,23 @@ func (c *Client) SetActivity(activity Activity) error {
 	return c.send(opFrame, payload)
 }
 
+// ClearActivity removes the Discord Rich Presence.
+func (c *Client) ClearActivity() error {
+	if c.conn == nil {
+		return fmt.Errorf("not connected")
+	}
+
+	payload := map[string]interface{}{
+		"cmd": "SET_ACTIVITY",
+		"args": map[string]interface{}{
+			"pid": os.Getpid(),
+		},
+		"nonce": fmt.Sprintf("%d", time.Now().UnixNano()),
+	}
+
+	return c.send(opFrame, payload)
+}
+
 // Close disconnects from Discord
 func (c *Client) Close() error {
 	if c.conn != nil {
