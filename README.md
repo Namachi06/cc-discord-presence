@@ -1,122 +1,52 @@
-# Clawd Code - Discord Rich Presence for Claude Code
+# cc-discord-presence
 
-Show your Claude Code session on Discord! Display your current project, git branch, model, session time, token usage, and cost in real-time.
+Discord Rich Presence for Claude Code. Show your coding session on Discord in real-time.
 
-## Platform Support
+```
+┌─────────────────────────────────────┐
+│ Coding...                           │  App name (customizable)
+│ Working on: my-project (main)       │  details_prefix, project_name, git_branch
+│ Opus 4.5 | 1.5M tokens | $0.12     │  model_name, tokens, cost
+│ 00:45:30 elapsed                    │  duration
+│ [GitHub] [Portfolio]                │  buttons (visible to others only)
+└─────────────────────────────────────┘
+```
 
-| Platform | Status |
-|----------|--------|
-| macOS (Apple Silicon) | ✅ Tested |
-| macOS (Intel) | ⚠️ Untested |
-| Linux (x64) | ⚠️ Untested |
-| Linux (ARM64) | ⚠️ Untested |
-| Windows (x64) | ✅ Tested |
-| Windows (ARM64) | ⚠️ Untested |
+## Quick Start
 
-> **Note**: macOS Intel and Linux should work but haven't been verified. Please [report problems](https://github.com/Namachi06/cc-discord-presence/issues).
->
-> **Windows users**: Requires [Git Bash](https://git-scm.com/downloads) (included with Git for Windows) for automatic plugin hooks. Alternatively, run the PowerShell scripts manually (`scripts/start.ps1` and `scripts/stop.ps1`). WSL won't work as Discord runs on the Windows host.
+1. Open Discord desktop app
+2. In Claude Code:
+   ```
+   /plugin marketplace add Namachi06/cc-discord-presence
+   /plugin install cc-discord-presence@cc-discord-presence
+   /reload-plugins
+   ```
+3. Start a new Claude Code session
+
+The plugin automatically downloads the binary and starts a background daemon. Your Discord status updates within seconds.
 
 ## Features
 
-- **Session Time** - Shows how long you've been coding with Claude
-- **Project Name** - Displays the current project you're working on
-- **Git Branch** - Shows your current git branch
-- **Model Name** - Shows which Claude model you're using (Opus 4.5, Sonnet 4.5, Haiku 4.5)
-- **Total Tokens** - Token usage counter (input + output)
-- **Total Cost** - Real-time cost tracking for your session
-
-## Installation
-
-### As a Claude Code Plugin (Recommended)
-
-```bash
-# Add the marketplace
-claude plugin marketplace add Namachi06/cc-discord-presence
-
-# Install the plugin
-claude plugin install cc-discord-presence@cc-discord-presence
-```
-
-That's it! The plugin will automatically start when you begin a Claude Code session and stop when you exit.
-
-### Manual Installation
-
-```bash
-# Clone and build
-git clone https://github.com/Namachi06/cc-discord-presence.git
-cd cc-discord-presence
-go build -o cc-discord-presence .
-
-# Run manually
-./cc-discord-presence
-```
-
-## How It Works
-
-The app reads session data from Claude Code in two ways:
-
-### 1. JSONL Fallback (Zero Config)
-
-By default, the app parses Claude Code's session files from `~/.claude/projects/`. This works out of the box with no configuration needed.
-
-### 2. Statusline Integration (More Accurate)
-
-For the most accurate token/cost data, you can configure the statusline integration. This uses Claude Code's own calculations instead of estimating from JSONL.
-
-<a name="statusline-setup"></a>
-#### Statusline Setup
-
-**Automatic Setup (Recommended)**:
-
-Run the setup script (requires `jq`):
-```bash
-# Find your plugin directory and run setup
-~/.claude/plugins/cache/*/cc-discord-presence/*/scripts/setup-statusline.sh
-```
-
-Or if you have the repo cloned:
-```bash
-./scripts/setup-statusline.sh
-```
-
-The setup script will:
-- Copy `statusline-wrapper.sh` to `~/.claude/`
-- Update your `~/.claude/settings.json` automatically
-- Back up any existing statusline to `~/.claude/statusline.sh`
-
-**Manual Setup**: If you prefer, edit `~/.claude/settings.json`:
-```json
-{
-  "statusLine": {
-    "command": "~/.claude/statusline-wrapper.sh",
-    "type": "command"
-  }
-}
-```
-
-Then copy `scripts/statusline-wrapper.sh` to `~/.claude/statusline-wrapper.sh`.
-
-**Note**: Restart Claude Code after setup for changes to take effect.
-
-#### Verifying Your Setup
-
-Check which data source is being used by viewing the daemon log:
-```bash
-cat ~/.claude/discord-presence.log
-```
-
-You'll see one of:
-- `✓ Found active session: project-name (using statusline data)` - Best accuracy
-- `✓ Found active session: project-name (using JSONL fallback)` - Working, but consider setting up statusline
+- Real-time session display: project, branch, model, tokens, cost, duration
+- Works out of the box with zero configuration
+- Show or hide any field individually
+- Custom prefixes, separators, and cost precision
+- Format templates for full layout control (`{project}`, `{model}`, `{tokens}`, etc.)
+- Clickable buttons on your presence (GitHub, portfolio, etc.)
+- Split token display (input/output separately)
+- Idle detection with configurable timeout
+- Session focus for multi-session setups (shows most recently active)
+- Custom Discord app support (your own icon and name)
+- Live config reload — edit and save, changes apply instantly
+- Cross-platform: macOS (arm64/amd64), Linux (amd64/arm64), Windows (amd64)
 
 ## Configuration
 
-You can customize which fields are displayed on Discord by creating a config file at `~/.claude/discord-presence.json`.
+Create `~/.claude/discord-presence.json` to customize. All fields are optional — omitted fields use defaults.
 
-**All fields are optional** — if the file doesn't exist or a field is omitted, defaults are used (everything visible).
+### Examples
 
-### Minimal Example (hide git branch)
+**Hide git branch:**
 
 ```json
 {
@@ -126,38 +56,50 @@ You can customize which fields are displayed on Discord by creating a config fil
 }
 ```
 
-### Full Example
+**Custom display:**
+
+```json
+{
+  "show": {
+    "split_tokens": true,
+    "cost_in_details": true
+  },
+  "display": {
+    "details_prefix": "Coding",
+    "cost_precision": 2
+  }
+}
+```
+
+**Full real-world config:**
 
 ```json
 {
   "show": {
     "project_name": true,
     "git_branch": false,
-    "model_name": true,
-    "tokens": true,
-    "split_tokens": true,
     "cost": true,
     "cost_in_details": true,
-    "duration": true
+    "split_tokens": false,
+    "session_focus": true
   },
   "display": {
     "details_prefix": "Coding",
-    "separator": " - ",
     "cost_precision": 2,
     "idle_timeout": 300,
-    "large_text": "My Custom Presence Text",
+    "large_image": "logo",
+    "large_text": "AI-assisted coding session",
     "discord_app_id": "YOUR_APP_ID"
   },
   "buttons": [
-    {"label": "GitHub", "url": "https://github.com/username"},
-    {"label": "Portfolio", "url": "https://example.com"}
+    {"label": "GitHub", "url": "https://github.com/username"}
   ]
 }
 ```
 
 ### Format Templates
 
-Override the default display format with custom templates. When set, they replace the `show.*` system entirely.
+Set `details_format` or `state_format` to override the `show.*` system entirely for that line.
 
 ```json
 {
@@ -168,147 +110,277 @@ Override the default display format with custom templates. When set, they replac
 }
 ```
 
-Available variables: `{project}`, `{branch}`, `{model}`, `{tokens}`, `{in_tokens}`, `{out_tokens}`, `{cost}`, `{duration}`, `{separator}`
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `{project}` | Project directory name | `my-app` |
+| `{branch}` | Git branch | `main` |
+| `{model}` | Model display name | `Opus 4.5` |
+| `{tokens}` | Total tokens (formatted) | `1.5M` |
+| `{in_tokens}` | Input tokens | `1.2M` |
+| `{out_tokens}` | Output tokens | `300K` |
+| `{cost}` | Cost without `$` sign | `0.12` |
+| `{duration}` | Session duration | `1h30m0s` |
+| `{separator}` | Configured separator | ` \| ` |
 
-> **Note**: `{cost}` returns the number without `$` (e.g., `0.12`). Write `${cost}` to get `$0.12`.
+> `{cost}` returns the number only. Write `${cost}` to get `$0.12`.
 
 ### Field Reference
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `show.project_name` | bool | `true` | Show project name in Details line |
-| `show.git_branch` | bool | `true` | Show git branch in Details line |
-| `show.model_name` | bool | `true` | Show Claude model in State line |
-| `show.tokens` | bool | `true` | Show token count in State line |
-| `show.split_tokens` | bool | `false` | Show input/output tokens separately (`150K in \| 50K out`) |
-| `show.cost` | bool | `true` | Show cost in State line |
-| `show.cost_in_details` | bool | `false` | Move cost to Details line instead of State line |
-| `show.duration` | bool | `true` | Show elapsed time |
-| `display.details_prefix` | string | `"Working on"` | Prefix before project/branch |
-| `display.details_format` | string | `""` | Custom template for Details line (overrides show.*) |
-| `display.state_format` | string | `""` | Custom template for State line (overrides show.*) |
-| `display.separator` | string | `" \| "` | Separator between State parts |
-| `display.cost_precision` | int | `4` | Decimal places for cost (0-10) |
-| `display.idle_timeout` | int | `0` | Seconds before showing "Idle" (0 = disabled, max 3600) |
-| `show.session_focus` | bool | `false` | Display the most recently active session (requires statusline) |
-| `display.large_image` | string | `""` | Asset key for large icon (requires custom Discord app) |
-| `display.large_text` | string | `"Clawd Code - ..."` | Tooltip text on the large icon |
-| `display.discord_app_id` | string | `""` | Custom Discord Application ID |
-| `buttons` | array | `[]` | Up to 2 clickable buttons (label max 32 chars, url must be http/https) |
+**Visibility (`show.*`):**
 
-> **Live reload**: Changes to the config file are picked up automatically — no need to restart the daemon.
->
-> **Note**: Changing `discord_app_id` requires a daemon restart. Buttons are only visible to other Discord users, not to yourself.
+| Field | Default | Affects | Description |
+|-------|---------|---------|-------------|
+| `project_name` | `true` | Details | Project directory name |
+| `git_branch` | `true` | Details | Git branch in parentheses |
+| `model_name` | `true` | State | Claude model name |
+| `tokens` | `true` | State | Token count |
+| `split_tokens` | `false` | State | Show input/output separately instead of total |
+| `cost` | `true` | State | Session cost |
+| `cost_in_details` | `false` | Details | Move cost from State to Details line |
+| `duration` | `true` | Timer | Elapsed time |
+| `session_focus` | `false` | Behavior | Display most recently active session (requires statusline) |
 
-## Discord Presence Display
+**Display (`display.*`):**
 
-```
-┌─────────────────────────────────┐
-│ Clawd Code                      │
-│ Working on: my-project (main)   │
-│ Opus 4.5 | 1.5M tokens | $0.1234│
-│ 00:45:30 elapsed                │
-└─────────────────────────────────┘
-```
+| Field | Default | Description |
+|-------|---------|-------------|
+| `details_prefix` | `"Working on"` | Text before project name |
+| `details_format` | `""` | Template override for Details line |
+| `state_format` | `""` | Template override for State line |
+| `separator` | `" \| "` | Separator between State fields |
+| `cost_precision` | `4` | Decimal places for cost (0-10) |
+| `idle_timeout` | `0` | Seconds before showing "Idle" (0 = disabled, max 3600) |
+| `large_image` | `""` | Asset key for icon (requires custom Discord app) |
+| `large_text` | `"Clawd Code - ..."` | Tooltip on icon hover (requires `large_image`) |
+| `discord_app_id` | `""` | Custom Discord Application ID |
 
-## Requirements
+**Buttons (`buttons`):**
 
-- [Discord](https://discord.com) desktop app running
-- [Claude Code](https://claude.ai/code) installed
-- Go 1.25+ (only for building from source)
+Array of up to 2 objects with `label` (max 32 chars) and `url` (http/https).
 
-## Building from Source
+> - Config changes apply automatically via live reload
+> - Changing `discord_app_id` requires a daemon restart
+> - Buttons are only visible to **other Discord users**, not yourself
+
+## Data Sources
+
+The plugin reads session data two ways. Both work out of the box, but statusline is more accurate.
+
+| | JSONL (default) | Statusline |
+|---|---|---|
+| **Setup** | None | One-time script |
+| **Token accuracy** | Estimated from transcripts | Direct from Claude Code |
+| **Cost accuracy** | Calculated from pricing table | Direct from Claude Code |
+| **Session focus** | Not supported | Supported |
+
+### Statusline Setup
+
+**Automatic:**
 
 ```bash
-# Build for current platform
-go build -o cc-discord-presence .
-
-# Cross-compile for all platforms
-mkdir -p bin
-GOOS=darwin GOARCH=arm64 go build -o bin/cc-discord-presence-darwin-arm64 .
-GOOS=darwin GOARCH=amd64 go build -o bin/cc-discord-presence-darwin-amd64 .
-GOOS=linux GOARCH=amd64 go build -o bin/cc-discord-presence-linux-amd64 .
-GOOS=linux GOARCH=arm64 go build -o bin/cc-discord-presence-linux-arm64 .
-GOOS=windows GOARCH=amd64 go build -o bin/cc-discord-presence-windows-amd64.exe .
+# Find and run the setup script from the plugin cache:
+~/.claude/plugins/cache/*/cc-discord-presence/*/scripts/setup-statusline.sh
 ```
+
+Requires `jq`. Restart Claude Code after setup.
+
+**Manual:**
+
+1. Copy the wrapper script:
+   ```bash
+   cp ~/.claude/plugins/cache/*/cc-discord-presence/*/scripts/statusline-wrapper.sh ~/.claude/
+   chmod +x ~/.claude/statusline-wrapper.sh
+   ```
+
+2. Add to `~/.claude/settings.json`:
+   ```json
+   {
+     "statusLine": {
+       "type": "command",
+       "command": "~/.claude/statusline-wrapper.sh"
+     }
+   }
+   ```
+
+3. Restart Claude Code
+
+### Verify Your Data Source
+
+```bash
+cat ~/.claude/discord-presence.log
+```
+
+Look for:
+- `using statusline data` — Best accuracy
+- `using JSONL fallback` — Working, but consider setting up statusline
+
+## Advanced Features
+
+### Idle Detection
+
+When `idle_timeout` is set, the State line changes to **"Idle"** if no session activity is detected within the timeout. Resumes automatically when you interact with Claude Code again.
+
+```json
+{"display": {"idle_timeout": 300}}
+```
+
+Set to `0` to disable. Maximum: `3600` seconds (1 hour).
+
+### Session Focus
+
+When running multiple Claude Code sessions simultaneously, the presence normally flickers between sessions. Enable `session_focus` to always display the **most recently active session** — the one you're currently interacting with.
+
+```json
+{"show": {"session_focus": true}}
+```
+
+Requires statusline integration. Per-session data files are automatically cleaned up after 10 minutes of inactivity.
+
+### Discord Buttons
+
+Add up to 2 clickable buttons. Labels max 32 characters, URLs must be http or https.
+
+```json
+{
+  "buttons": [
+    {"label": "GitHub", "url": "https://github.com/username"},
+    {"label": "Portfolio", "url": "https://example.com"}
+  ]
+}
+```
+
+**Important:** Buttons are only visible to other Discord users viewing your profile, not to yourself.
+
+### Custom Discord App
+
+By default, the plugin uses a shared Discord app. Create your own for a custom icon and name:
+
+1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
+2. Click **New Application** and name it
+   > Discord blocks trademarked names like "Claude Code". Use alternatives like "Coding..." or "Dev Session".
+3. Set an app icon in **General Information**
+4. For icon tooltip support: go to **Rich Presence > Art Assets**, upload an image, and note the asset key name
+5. Copy the **Application ID** and add to your config:
+   ```json
+   {
+     "display": {
+       "discord_app_id": "YOUR_APPLICATION_ID",
+       "large_image": "your-asset-key",
+       "large_text": "Your tooltip text"
+     }
+   }
+   ```
+6. Restart the daemon (exit and reopen Claude Code)
 
 ## Token Pricing
 
-Cost is calculated using current Claude API pricing (Dec 2025):
+Used for cost estimation in JSONL fallback mode. Statusline mode gets cost directly from Claude Code.
 
-| Model | Input (per 1M tokens) | Output (per 1M tokens) |
-|-------|----------------------|------------------------|
+| Model | Input ($/1M tokens) | Output ($/1M tokens) |
+|-------|--------------------:|---------------------:|
 | Opus 4.5 | $15.00 | $75.00 |
 | Sonnet 4.5 | $3.00 | $15.00 |
 | Sonnet 4 | $3.00 | $15.00 |
 | Haiku 4.5 | $1.00 | $5.00 |
 
-## Advanced: Custom Discord App
+Unknown models default to Sonnet 4 pricing. See [Anthropic pricing](https://www.anthropic.com/pricing) for updates.
 
-By default, this uses a shared Discord application ("Clawd Code"). If you want to use your own:
+## Platform Support
 
-1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
-2. Click "New Application" and name it
-   > ⚠️ **Note**: Discord blocks trademarked names like "Claude Code"
-3. Set an app icon in "General Information" (this appears in Rich Presence)
-4. Copy the **Application ID** and set it in your config file:
-   ```json
-   {
-     "display": {
-       "discord_app_id": "YOUR_APPLICATION_ID"
-     }
-   }
-   ```
-5. Restart the daemon
+| Platform | Status | Notes |
+|----------|--------|-------|
+| macOS (Apple Silicon) | Tested | Primary development platform |
+| macOS (Intel) | Supported | |
+| Linux (x86_64) | Supported | |
+| Linux (ARM64) | Supported | |
+| Windows (x86_64) | Supported | Requires Git Bash for shell scripts |
+
+## Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| No presence showing | Ensure Discord **desktop app** is running (not web). Check `~/.claude/discord-presence.log` for errors. |
+| Tokens or cost seem wrong | Set up statusline integration. JSONL fallback estimates from a pricing table. |
+| "Idle" showing when coding | Increase `idle_timeout` or set to `0` to disable. |
+| Config changes not applying | Changes auto-reload. Exception: `discord_app_id` requires daemon restart. |
+| Binary download fails | Check internet. Manual download: get binary from [Releases](https://github.com/Namachi06/cc-discord-presence/releases) and place in `~/.claude/bin/`. |
+| Buttons not showing | Buttons are only visible to **other** Discord users. Ask a friend to check. |
+| Wrong project in multi-session | Enable `session_focus` in config. Requires statusline. |
+| Windows: not working | Ensure Git Bash is installed. WSL is not supported (Discord runs on Windows host). |
+
+## File Paths
+
+| File | Purpose |
+|------|---------|
+| `~/.claude/discord-presence.json` | User configuration (optional) |
+| `~/.claude/discord-presence.log` | Daemon log output |
+| `~/.claude/discord-presence.pid` | Daemon process ID |
+| `~/.claude/discord-presence-data.json` | Statusline data (shared) |
+| `~/.claude/discord-presence-session-<id>.json` | Per-session data (session focus) |
+| `~/.claude/discord-presence-sessions/` | Active session PID tracking |
+| `~/.claude/bin/cc-discord-presence-<os>-<arch>` | Auto-downloaded binary |
+| `~/.claude/statusline-wrapper.sh` | Statusline wrapper (after setup) |
+
+## Building from Source
+
+Requires Go 1.25+.
+
+```bash
+git clone https://github.com/Namachi06/cc-discord-presence.git
+cd cc-discord-presence
+go build -o cc-discord-presence .
+
+# Cross-compile for all platforms:
+./scripts/build.sh
+
+# Run tests:
+go test -v ./...
+```
 
 ## Uninstallation
 
 ### Plugin Removal
 
-```bash
-claude plugin uninstall cc-discord-presence@cc-discord-presence
+```
+/plugin uninstall cc-discord-presence@cc-discord-presence
+/reload-plugins
 ```
 
-### Statusline Cleanup (if configured)
-
-If you set up statusline integration, restore your original settings:
+### Manual Cleanup
 
 ```bash
-# Remove the wrapper script
-rm ~/.claude/statusline-wrapper.sh
+# Remove daemon files
+rm -f ~/.claude/discord-presence.pid
+rm -f ~/.claude/discord-presence.log
+rm -f ~/.claude/discord-presence-data.json
+rm -f ~/.claude/discord-presence-session-*.json
+rm -rf ~/.claude/discord-presence-sessions
+rm -f ~/.claude/discord-presence.json
 
-# Restore your original statusline in settings.json:
-# Option 1: Point back to the default statusline.sh
-jq '.statusLine.command = "~/.claude/statusline.sh"' ~/.claude/settings.json > ~/.claude/settings.json.tmp \
-  && mv ~/.claude/settings.json.tmp ~/.claude/settings.json
+# Remove binary
+rm -f ~/.claude/bin/cc-discord-presence-*
 
-# Option 2: Remove statusline config entirely
-jq 'del(.statusLine)' ~/.claude/settings.json > ~/.claude/settings.json.tmp \
-  && mv ~/.claude/settings.json.tmp ~/.claude/settings.json
+# Remove statusline wrapper (if installed)
+rm -f ~/.claude/statusline-wrapper.sh
 ```
 
-Restart Claude Code after making changes.
+If you set up statusline integration, restore your original statusline in `~/.claude/settings.json`.
 
 ## Privacy
 
-This application runs entirely locally and does not collect any data. See [PRIVACY.md](PRIVACY.md) for details.
-
-## License
-
-MIT License - see [LICENSE](LICENSE) for details.
+No data is collected or sent to external servers. All processing is local. See [PRIVACY.md](PRIVACY.md).
 
 ## Contributing
 
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Run `go test -v ./...` before submitting PRs.
 
-**Before submitting a PR**, make sure to run the test suite:
-```bash
-go test -v ./...
-```
+## License
+
+[MIT](LICENSE)
 
 ## Acknowledgments
 
 - [Anthropic](https://anthropic.com) for Claude
+- [tsanva](https://github.com/tsanva) for the original [cc-discord-presence](https://github.com/tsanva/cc-discord-presence)
 - [fsnotify](https://github.com/fsnotify/fsnotify) for file watching
 - [go-winio](https://github.com/Microsoft/go-winio) for Windows named pipe support
-- The Claude Code community
