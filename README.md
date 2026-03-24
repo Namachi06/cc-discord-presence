@@ -126,7 +126,7 @@ Set `details_format` or `state_format` to override the `show.*` system entirely 
 
 ### Field Reference
 
-**Visibility (`show.*`):**
+**What to show:**
 
 | Field | Default | Affects | Description |
 |-------|---------|---------|-------------|
@@ -140,7 +140,7 @@ Set `details_format` or `state_format` to override the `show.*` system entirely 
 | `duration` | `true` | Timer | Elapsed time |
 | `session_focus` | `false` | Behavior | Display most recently active session (requires statusline) |
 
-**Display (`display.*`):**
+**How it looks:**
 
 | Field | Default | Description |
 |-------|---------|-------------|
@@ -154,7 +154,7 @@ Set `details_format` or `state_format` to override the `show.*` system entirely 
 | `large_text` | `"Clawd Code - ..."` | Tooltip on icon hover (requires `large_image`) |
 | `discord_app_id` | `""` | Custom Discord Application ID |
 
-**Buttons (`buttons`):**
+**Buttons:**
 
 Array of up to 2 objects with `label` (max 32 chars) and `url` (http/https).
 
