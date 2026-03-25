@@ -104,8 +104,14 @@ var (
 	lastSessionData  *SessionData
 	lastDataChange   time.Time
 	isIdle           bool
-	isDisabled       bool
-	idleStartTime    time.Time
+	isDisabled           bool
+	idleStartTime        time.Time
+	lastPresenceDetails  string
+	lastPresenceState    string
+	gitBranchCache       = make(map[string]struct {
+		branch  string
+		expires time.Time
+	})
 )
 
 func init() {
@@ -187,13 +193,8 @@ func statusLineToSessionData(sl *StatusLineData, startTime time.Time) *SessionDa
 		projectPath = sl.Cwd
 	}
 
-	projectName := filepath.Base(projectPath)
-	if projectName == "" || projectName == "." {
-		projectName = "Unknown Project"
-	}
-
 	return &SessionData{
-		ProjectName:  projectName,
+		ProjectName:  projectNameFromPath(projectPath),
 		ProjectPath:  projectPath,
 		GitBranch:    getGitBranch(projectPath),
 		ModelName:    sl.Model.DisplayName,
@@ -292,9 +293,22 @@ func cleanupStaleSessions() {
 	}
 }
 
+func projectNameFromPath(path string) string {
+	name := filepath.Base(path)
+	if name == "" || name == "." {
+		return "Unknown Project"
+	}
+	return name
+}
+
 func getGitBranch(projectPath string) string {
 	if projectPath == "" {
 		return ""
+	}
+
+	// Check cache (30s TTL)
+	if cached, ok := gitBranchCache[projectPath]; ok && time.Now().Before(cached.expires) {
+		return cached.branch
 	}
 
 	cmd := exec.Command("git", "-C", projectPath, "rev-parse", "--abbrev-ref", "HEAD")
@@ -313,6 +327,12 @@ func getGitBranch(projectPath string) string {
 			branch = strings.TrimSpace(string(output))
 		}
 	}
+
+	// Cache the result for 30 seconds
+	gitBranchCache[projectPath] = struct {
+		branch  string
+		expires time.Time
+	}{branch, time.Now().Add(30 * time.Second)}
 
 	return branch
 }
@@ -439,15 +459,8 @@ func parseJSONLSession(jsonlPath, _ string) *SessionData {
 	// Get display name for model
 	modelName := formatModelName(lastModel)
 
-	projectName := filepath.Base(projectPath)
-	if projectName == "" || projectName == "." {
-		projectName = "Unknown Project"
-	}
-
-	// Use daemon start time for elapsed time display
-	// This shows how long Discord presence has been active, not total session time
 	return &SessionData{
-		ProjectName:  projectName,
+		ProjectName:  projectNameFromPath(projectPath),
 		ProjectPath:  projectPath,
 		GitBranch:    getGitBranch(projectPath),
 		ModelName:    modelName,
@@ -565,13 +578,9 @@ func processSessionUpdate(session *SessionData) {
 	}
 
 	cfg := currentConfig
-	idleTimeout := 0
-	if cfg.Display.IdleTimeout != nil {
-		idleTimeout = *cfg.Display.IdleTimeout
-	}
 
 	wasIdle := isIdle
-	isIdle, lastDataChange = checkIdle(lastSessionData, session, lastDataChange, idleTimeout)
+	isIdle, lastDataChange = checkIdle(lastSessionData, session, lastDataChange, intDefault(cfg.Display.IdleTimeout, 0))
 
 	if isIdle && !wasIdle {
 		idleStartTime = time.Now()
@@ -585,11 +594,7 @@ func processSessionUpdate(session *SessionData) {
 	}
 
 	// Auto-disable after extended idle
-	idleDisable := 0
-	if cfg.Display.IdleDisable != nil {
-		idleDisable = *cfg.Display.IdleDisable
-	}
-	if checkIdleDisable(isIdle, idleStartTime, idleDisable) {
+	if checkIdleDisable(isIdle, idleStartTime, intDefault(cfg.Display.IdleDisable, 0)) {
 		if !isDisabled {
 			isDisabled = true
 			fmt.Println("🛑 Presence cleared (idle too long)")
@@ -662,6 +667,13 @@ func updatePresence(session *SessionData) {
 			URL:   b.URL,
 		})
 	}
+
+	// Skip no-op updates to avoid unnecessary IPC writes
+	if details == lastPresenceDetails && state == lastPresenceState {
+		return
+	}
+	lastPresenceDetails = details
+	lastPresenceState = state
 
 	if err := discordClient.SetActivity(activity); err != nil {
 		fmt.Fprintf(os.Stderr, "Error updating presence: %v\n", err)

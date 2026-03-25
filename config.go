@@ -56,9 +56,44 @@ var (
 	currentConfig  *Config
 )
 
-func boolPtr(b bool) *bool       { return &b }
-func intPtr(i int) *int          { return &i }
+func boolPtr(b bool) *bool          { return &b }
+func intPtr(i int) *int             { return &i }
 func float64Ptr(f float64) *float64 { return &f }
+
+func intDefault(ptr *int, def int) int {
+	if ptr == nil {
+		return def
+	}
+	return *ptr
+}
+
+func clampInt(ptr *int, min, max int) *int {
+	if ptr == nil {
+		return nil
+	}
+	v := *ptr
+	if v < min {
+		v = min
+	}
+	if v > max {
+		v = max
+	}
+	return intPtr(v)
+}
+
+func clampFloat64(ptr *float64, min, max float64) *float64 {
+	if ptr == nil {
+		return nil
+	}
+	v := *ptr
+	if v < min {
+		v = min
+	}
+	if v > max {
+		v = max
+	}
+	return float64Ptr(v)
+}
 
 // showField safely dereferences a *bool, defaulting to true if nil.
 func showField(ptr *bool) bool {
@@ -168,45 +203,17 @@ func mergeConfig(defaults, user *Config) *Config {
 	if user.Display.Separator != "" {
 		result.Display.Separator = user.Display.Separator
 	}
-	if user.Display.CostPrecision != nil {
-		p := *user.Display.CostPrecision
-		if p < 0 {
-			p = 0
-		}
-		if p > 10 {
-			p = 10
-		}
-		result.Display.CostPrecision = intPtr(p)
+	if v := clampInt(user.Display.CostPrecision, 0, 10); v != nil {
+		result.Display.CostPrecision = v
 	}
-	if user.Display.IdleTimeout != nil {
-		t := *user.Display.IdleTimeout
-		if t < 0 {
-			t = 0
-		}
-		if t > 3600 {
-			t = 3600
-		}
-		result.Display.IdleTimeout = intPtr(t)
+	if v := clampInt(user.Display.IdleTimeout, 0, 3600); v != nil {
+		result.Display.IdleTimeout = v
 	}
-	if user.Display.IdleDisable != nil {
-		d := *user.Display.IdleDisable
-		if d < 0 {
-			d = 0
-		}
-		if d > 86400 {
-			d = 86400
-		}
-		result.Display.IdleDisable = intPtr(d)
+	if v := clampInt(user.Display.IdleDisable, 0, 86400); v != nil {
+		result.Display.IdleDisable = v
 	}
-	if user.Display.CostAlert != nil {
-		c := *user.Display.CostAlert
-		if c < 0 {
-			c = 0
-		}
-		if c > 100000 {
-			c = 100000
-		}
-		result.Display.CostAlert = float64Ptr(c)
+	if v := clampFloat64(user.Display.CostAlert, 0, 100000); v != nil {
+		result.Display.CostAlert = v
 	}
 	if len(user.Display.ModelIcons) > 0 {
 		result.Display.ModelIcons = user.Display.ModelIcons
@@ -271,11 +278,7 @@ func buildDetailsLine(session *SessionData, cfg *Config) string {
 	}
 
 	if showField(cfg.Show.Cost) && showField(cfg.Show.CostInDetails) {
-		precision := 4
-		if cfg.Display.CostPrecision != nil {
-			precision = *cfg.Display.CostPrecision
-		}
-		base = fmt.Sprintf("%s | $%.*f", base, precision, session.TotalCost)
+		base = fmt.Sprintf("%s | $%.*f", base, intDefault(cfg.Display.CostPrecision, 4), session.TotalCost)
 	}
 
 	return truncate(base, 128)
@@ -284,10 +287,7 @@ func buildDetailsLine(session *SessionData, cfg *Config) string {
 // buildStateLine constructs the State field for Discord presence.
 func buildStateLine(session *SessionData, cfg *Config) string {
 	sep := cfg.Display.Separator
-	precision := 4
-	if cfg.Display.CostPrecision != nil {
-		precision = *cfg.Display.CostPrecision
-	}
+	precision := intDefault(cfg.Display.CostPrecision, 4)
 
 	var parts []string
 
@@ -314,10 +314,7 @@ func buildStateLine(session *SessionData, cfg *Config) string {
 // Available variables: {project}, {branch}, {model}, {tokens},
 // {in_tokens}, {out_tokens}, {cost}, {duration}, {separator}
 func formatTemplate(template string, session *SessionData, cfg *Config) string {
-	precision := 4
-	if cfg.Display.CostPrecision != nil {
-		precision = *cfg.Display.CostPrecision
-	}
+	precision := intDefault(cfg.Display.CostPrecision, 4)
 
 	duration := time.Since(session.StartTime).Truncate(time.Second).String()
 
@@ -376,11 +373,12 @@ func checkIdleDisable(idle bool, idleStart time.Time, secs int) bool {
 
 // truncate shortens a string to maxLen, appending "..." if truncated.
 func truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
 		return s
 	}
 	if maxLen <= 3 {
-		return s[:maxLen]
+		return string(runes[:maxLen])
 	}
-	return s[:maxLen-3] + "..."
+	return string(runes[:maxLen-3]) + "..."
 }
