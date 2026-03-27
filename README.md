@@ -29,6 +29,7 @@ Discord Rich Presence for Claude Code. Show your coding session on Discord in re
   - [Privacy Mode](#privacy-mode)
   - [Cost Alert](#cost-alert)
   - [Model Icons](#model-icons)
+  - [Project Exclusion](#project-exclusion)
   - [Session Focus](#session-focus)
   - [Discord Buttons](#discord-buttons)
   - [Custom Discord App](#custom-discord-app)
@@ -184,6 +185,7 @@ Set `details_format` or `state_format` to override the `show.*` system entirely 
 | `idle_timeout` | `0` | Seconds before showing "Idle" (0 = disabled, max 3600) |
 | `idle_disable` | `0` | Seconds of idle before clearing presence entirely (0 = disabled, max 86400) |
 | `cost_alert` | `0` | Cost threshold to prepend ⚠ warning (0 = disabled) |
+| `exclude_projects` | `[]` | List of path glob patterns to mask as "Private Project" |
 | `model_icons` | `{}` | Map of model keyword to Discord asset key (requires custom app) |
 | `large_image` | `""` | Asset key for icon (requires custom Discord app) |
 | `large_text` | `"Clawd Code - ..."` | Tooltip on icon hover (requires `large_image`) |
@@ -310,6 +312,23 @@ Display a model-specific small icon in the corner of the presence. Requires a cu
 ```
 
 Matches model name by case-insensitive substring. Suppressed in privacy mode.
+
+### Project Exclusion
+
+Mask specific projects from Discord. The project name is replaced with "Private Project" and the git branch is hidden, but model, tokens, cost, and duration remain visible.
+
+```json
+{
+  "display": {
+    "exclude_projects": [
+      "/Users/me/work/*",
+      "/Users/me/clients/*"
+    ]
+  }
+}
+```
+
+Uses glob patterns on the full project path (`*` matches one directory level). Live reload supported.
 
 ### Session Focus
 

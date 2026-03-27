@@ -618,6 +618,21 @@ func updatePresence(session *SessionData) {
 	cfg := currentConfig
 	privacy := showFieldDefault(cfg.Show.PrivacyMode, false)
 
+	// Project exclusion: mask project name if path matches exclude pattern
+	if isProjectExcluded(session.ProjectPath, cfg.Display.ExcludeProjects) {
+		session = &SessionData{
+			ProjectName:  "Private Project",
+			ProjectPath:  session.ProjectPath,
+			GitBranch:    "",
+			ModelName:    session.ModelName,
+			TotalTokens:  session.TotalTokens,
+			InputTokens:  session.InputTokens,
+			OutputTokens: session.OutputTokens,
+			TotalCost:    session.TotalCost,
+			StartTime:    session.StartTime,
+		}
+	}
+
 	var details, state string
 
 	if privacy {

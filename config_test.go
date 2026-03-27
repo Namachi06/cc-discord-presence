@@ -842,6 +842,30 @@ func TestMatchModelIcon(t *testing.T) {
 	}
 }
 
+func TestIsProjectExcluded(t *testing.T) {
+	tests := []struct {
+		name     string
+		path     string
+		patterns []string
+		want     bool
+	}{
+		{"empty patterns", "/Users/me/project", nil, false},
+		{"empty path", "", []string{"/Users/me/*"}, false},
+		{"exact match", "/Users/me/secret", []string{"/Users/me/secret"}, true},
+		{"wildcard match", "/Users/me/secret", []string{"/Users/me/*"}, true},
+		{"no match", "/Users/me/public", []string{"/Users/other/*"}, false},
+		{"multiple patterns one match", "/Users/me/work", []string{"/Users/other/*", "/Users/me/*"}, true},
+		{"multiple patterns no match", "/Users/me/public", []string{"/private/*", "/secret/*"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isProjectExcluded(tt.path, tt.patterns); got != tt.want {
+				t.Errorf("isProjectExcluded() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestCheckIdleDisable(t *testing.T) {
 	t.Run("disabled when 0", func(t *testing.T) {
 		if checkIdleDisable(true, time.Now().Add(-time.Hour), 0) {

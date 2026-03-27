@@ -1,6 +1,6 @@
 {
   "name": "cc-discord-presence",
-  "version": "1.3.1",
+  "version": "1.4.0",
   "description": "Discord Rich Presence for Claude Code - Show your session on Discord",
   "author": {
     "name": "Namachi06",

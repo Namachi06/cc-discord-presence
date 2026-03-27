@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -45,7 +46,8 @@ type DisplayConfig struct {
 	IdleTimeout   *int   `json:"idle_timeout"`
 	IdleDisable   *int                `json:"idle_disable"`
 	CostAlert     *float64            `json:"cost_alert"`
-	ModelIcons    map[string]string   `json:"model_icons"`
+	ExcludeProjects []string            `json:"exclude_projects"`
+	ModelIcons      map[string]string   `json:"model_icons"`
 	LargeImage    string              `json:"large_image"`
 	LargeText     string              `json:"large_text"`
 	DiscordAppID  string              `json:"discord_app_id"`
@@ -215,6 +217,9 @@ func mergeConfig(defaults, user *Config) *Config {
 	if v := clampFloat64(user.Display.CostAlert, 0, 100000); v != nil {
 		result.Display.CostAlert = v
 	}
+	if len(user.Display.ExcludeProjects) > 0 {
+		result.Display.ExcludeProjects = user.Display.ExcludeProjects
+	}
 	if len(user.Display.ModelIcons) > 0 {
 		result.Display.ModelIcons = user.Display.ModelIcons
 	}
@@ -369,6 +374,19 @@ func checkIdleDisable(idle bool, idleStart time.Time, secs int) bool {
 		return false
 	}
 	return time.Since(idleStart) >= time.Duration(secs)*time.Second
+}
+
+// isProjectExcluded checks if a project path matches any exclusion pattern.
+func isProjectExcluded(projectPath string, patterns []string) bool {
+	if len(patterns) == 0 || projectPath == "" {
+		return false
+	}
+	for _, pattern := range patterns {
+		if matched, _ := filepath.Match(pattern, projectPath); matched {
+			return true
+		}
+	}
+	return false
 }
 
 // truncate shortens a string to maxLen, appending "..." if truncated.
