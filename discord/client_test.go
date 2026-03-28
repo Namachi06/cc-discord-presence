@@ -163,6 +163,8 @@ func TestClient_SetActivity(t *testing.T) {
 			client := NewClient("test-client-id")
 			mock := &mockConn{}
 			client.conn = mock
+		client.connected = true
+			client.connected = true
 
 			err := client.SetActivity(tt.activity)
 			if err != nil {
@@ -287,6 +289,7 @@ func TestClient_send(t *testing.T) {
 			client := NewClient("test")
 			mock := &mockConn{}
 			client.conn = mock
+		client.connected = true
 
 			err := client.send(tt.opcode, tt.data)
 			if (err != nil) != tt.wantErr {
@@ -326,6 +329,7 @@ func TestClient_send(t *testing.T) {
 		client := NewClient("test")
 		mock := &mockConn{writeErr: errors.New("write failed")}
 		client.conn = mock
+		client.connected = true
 
 		err := client.send(opFrame, map[string]string{"test": "data"})
 		if err == nil {
@@ -339,6 +343,7 @@ func TestClient_receive(t *testing.T) {
 		client := NewClient("test")
 		mock := &mockConn{}
 		client.conn = mock
+		client.connected = true
 
 		// Write a valid frame to the read buffer
 		payload := []byte(`{"type":"READY"}`)
@@ -358,6 +363,7 @@ func TestClient_receive(t *testing.T) {
 		client := NewClient("test")
 		mock := &mockConn{}
 		client.conn = mock
+		client.connected = true
 
 		mock.writeFrame(opFrame, []byte{})
 
@@ -375,6 +381,7 @@ func TestClient_receive(t *testing.T) {
 		client := NewClient("test")
 		mock := &mockConn{readErr: io.EOF}
 		client.conn = mock
+		client.connected = true
 
 		_, err := client.receive()
 		if err == nil {
@@ -386,6 +393,7 @@ func TestClient_receive(t *testing.T) {
 		client := NewClient("test")
 		mock := &mockConn{}
 		client.conn = mock
+		client.connected = true
 
 		// Write header only, no payload
 		binary.Write(&mock.readBuffer, binary.LittleEndian, int32(opFrame))

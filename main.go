@@ -112,6 +112,10 @@ var (
 		branch  string
 		expires time.Time
 	})
+	disconnected         bool
+	disconnectedLoggedAt time.Time
+	lastReconnectAttempt time.Time
+	reconnectAttempts    int
 )
 
 func init() {
@@ -148,11 +152,11 @@ func main() {
 	fmt.Println("🔗 Connecting to Discord...")
 	discordClient = discord.NewClient(clientID)
 	if err := discordClient.Connect(); err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Failed to connect to Discord: %v\n", err)
-		fmt.Fprintln(os.Stderr, "   Make sure Discord is running and try again.")
-		os.Exit(1)
+		fmt.Println("⏳ Discord not available, waiting for it to start...")
+		disconnected = true
+	} else {
+		fmt.Println("✓ Discord RPC connected!")
 	}
-	fmt.Println("✓ Discord RPC connected!")
 
 	// Setup graceful shutdown
 	sigChan := make(chan os.Signal, 1)
@@ -608,9 +612,41 @@ func processSessionUpdate(session *SessionData) {
 	updatePresence(session)
 }
 
+func tryReconnect() bool {
+	interval := 10 * time.Second
+	if reconnectAttempts == 0 {
+		interval = 5 * time.Second
+	}
+	if time.Since(lastReconnectAttempt) < interval {
+		return false
+	}
+
+	lastReconnectAttempt = time.Now()
+	reconnectAttempts++
+
+	if err := discordClient.Reconnect(); err != nil {
+		if disconnectedLoggedAt.IsZero() {
+			fmt.Println("⚠ Discord disconnected, will retry periodically...")
+			disconnectedLoggedAt = time.Now()
+		}
+		return false
+	}
+
+	fmt.Println("✓ Discord RPC reconnected!")
+	disconnected = false
+	reconnectAttempts = 0
+	disconnectedLoggedAt = time.Time{}
+	return true
+}
+
 func clearPresence() {
+	if disconnected {
+		return
+	}
 	if err := discordClient.ClearActivity(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error clearing presence: %v\n", err)
+		disconnected = true
+		lastPresenceDetails = ""
+		lastPresenceState = ""
 	}
 }
 
@@ -695,6 +731,10 @@ func updatePresence(session *SessionData) {
 		})
 	}
 
+	if disconnected {
+		return
+	}
+
 	// Skip no-op updates to avoid unnecessary IPC writes
 	if details == lastPresenceDetails && state == lastPresenceState {
 		return
@@ -703,7 +743,9 @@ func updatePresence(session *SessionData) {
 	lastPresenceState = state
 
 	if err := discordClient.SetActivity(activity); err != nil {
-		fmt.Fprintf(os.Stderr, "Error updating presence: %v\n", err)
+		disconnected = true
+		lastPresenceDetails = ""
+		lastPresenceState = ""
 	}
 }
 
@@ -771,7 +813,11 @@ func watchForChanges() {
 			}
 			fmt.Fprintf(os.Stderr, "Watcher error: %v\n", err)
 		case <-ticker.C:
-			// Poll reads from either statusline or JSONL fallback
+			if disconnected {
+				if tryReconnect() && lastSessionData != nil {
+					updatePresence(lastSessionData)
+				}
+			}
 			if session := readSessionData(); session != nil {
 				processSessionUpdate(session)
 			}
@@ -793,6 +839,11 @@ func pollForChanges() {
 	for {
 		select {
 		case <-ticker.C:
+			if disconnected {
+				if tryReconnect() && lastSessionData != nil {
+					updatePresence(lastSessionData)
+				}
+			}
 			if session := readSessionData(); session != nil {
 				processSessionUpdate(session)
 			}

@@ -43,8 +43,10 @@ type Conn interface {
 
 // Client handles Discord RPC connection
 type Client struct {
-	clientID string
-	conn     Conn
+	clientID    string
+	conn        Conn
+	connected   bool
+	ConnectFunc func() (Conn, error) // nil = use default, for testing
 }
 
 // NewClient creates a new Discord RPC client
@@ -52,10 +54,22 @@ func NewClient(clientID string) *Client {
 	return &Client{clientID: clientID}
 }
 
+// IsConnected returns whether the client has an active Discord connection.
+func (c *Client) IsConnected() bool {
+	return c.connected
+}
+
 // Connect establishes connection to Discord
 func (c *Client) Connect() error {
-	conn, err := c.connectToDiscord()
+	var conn Conn
+	var err error
+	if c.ConnectFunc != nil {
+		conn, err = c.ConnectFunc()
+	} else {
+		conn, err = c.connectToDiscord()
+	}
 	if err != nil {
+		c.connected = false
 		return err
 	}
 	c.conn = conn
@@ -67,21 +81,36 @@ func (c *Client) Connect() error {
 	}
 	if err := c.send(opHandshake, handshake); err != nil {
 		c.conn.Close()
+		c.conn = nil
+		c.connected = false
 		return fmt.Errorf("handshake failed: %w", err)
 	}
 
 	// Read handshake response
 	if _, err := c.receive(); err != nil {
 		c.conn.Close()
+		c.conn = nil
+		c.connected = false
 		return fmt.Errorf("handshake response failed: %w", err)
 	}
 
+	c.connected = true
 	return nil
+}
+
+// Reconnect closes the old connection and attempts a fresh Connect.
+func (c *Client) Reconnect() error {
+	c.connected = false
+	if c.conn != nil {
+		c.conn.Close()
+		c.conn = nil
+	}
+	return c.Connect()
 }
 
 // SetActivity updates the Discord Rich Presence
 func (c *Client) SetActivity(activity Activity) error {
-	if c.conn == nil {
+	if !c.connected {
 		return fmt.Errorf("not connected")
 	}
 
@@ -146,7 +175,7 @@ func (c *Client) SetActivity(activity Activity) error {
 
 // ClearActivity removes the Discord Rich Presence.
 func (c *Client) ClearActivity() error {
-	if c.conn == nil {
+	if !c.connected {
 		return fmt.Errorf("not connected")
 	}
 
@@ -163,8 +192,11 @@ func (c *Client) ClearActivity() error {
 
 // Close disconnects from Discord
 func (c *Client) Close() error {
+	c.connected = false
 	if c.conn != nil {
-		return c.conn.Close()
+		err := c.conn.Close()
+		c.conn = nil
+		return err
 	}
 	return nil
 }
