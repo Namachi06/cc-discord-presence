@@ -47,6 +47,7 @@ type DisplayConfig struct {
 	IdleDisable   *int                `json:"idle_disable"`
 	CostAlert     *float64            `json:"cost_alert"`
 	ExcludeProjects []string            `json:"exclude_projects"`
+	ProjectNames    map[string]string   `json:"project_names"`
 	ModelIcons      map[string]string   `json:"model_icons"`
 	LargeImage    string              `json:"large_image"`
 	LargeText     string              `json:"large_text"`
@@ -220,6 +221,9 @@ func mergeConfig(defaults, user *Config) *Config {
 	if len(user.Display.ExcludeProjects) > 0 {
 		result.Display.ExcludeProjects = user.Display.ExcludeProjects
 	}
+	if len(user.Display.ProjectNames) > 0 {
+		result.Display.ProjectNames = user.Display.ProjectNames
+	}
 	if len(user.Display.ModelIcons) > 0 {
 		result.Display.ModelIcons = user.Display.ModelIcons
 	}
@@ -387,6 +391,20 @@ func isProjectExcluded(projectPath string, patterns []string) bool {
 		}
 	}
 	return false
+}
+
+// resolveProjectName returns a custom display name if the project path
+// matches any pattern in the project_names map.
+func resolveProjectName(projectPath string, names map[string]string) (string, bool) {
+	if len(names) == 0 || projectPath == "" {
+		return "", false
+	}
+	for pattern, name := range names {
+		if matched, _ := filepath.Match(pattern, projectPath); matched {
+			return name, true
+		}
+	}
+	return "", false
 }
 
 // truncate shortens a string to maxLen, appending "..." if truncated.

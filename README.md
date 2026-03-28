@@ -30,6 +30,7 @@ Discord Rich Presence for Claude Code. Show your coding session on Discord in re
   - [Cost Alert](#cost-alert)
   - [Model Icons](#model-icons)
   - [Project Exclusion](#project-exclusion)
+  - [Project Name Aliases](#project-name-aliases)
   - [Session Focus](#session-focus)
   - [Discord Buttons](#discord-buttons)
   - [Custom Discord App](#custom-discord-app)
@@ -186,6 +187,7 @@ Set `details_format` or `state_format` to override the `show.*` system entirely 
 | `idle_disable` | `0` | Seconds of idle before clearing presence entirely (0 = disabled, max 86400) |
 | `cost_alert` | `0` | Cost threshold to prepend ⚠ warning (0 = disabled) |
 | `exclude_projects` | `[]` | List of path glob patterns to mask as "Private Project" |
+| `project_names` | `{}` | Map of path glob pattern to custom display name |
 | `model_icons` | `{}` | Map of model keyword to Discord asset key (requires custom app) |
 | `large_image` | `""` | Asset key for icon (requires custom Discord app) |
 | `large_text` | `"Clawd Code - ..."` | Tooltip on icon hover (requires `large_image`) |
@@ -329,6 +331,23 @@ Mask specific projects from Discord. The project name is replaced with "Private 
 ```
 
 Uses glob patterns on the full project path (`*` matches one directory level). Live reload supported.
+
+### Project Name Aliases
+
+Map project paths to custom display names. The custom name replaces the directory name while git branch and all other fields remain visible.
+
+```json
+{
+  "display": {
+    "project_names": {
+      "/Users/me/projects/my-long-project-name": "Short Name",
+      "/Users/me/work/*": "Work Project"
+    }
+  }
+}
+```
+
+Uses glob patterns on the full project path, same as `exclude_projects`. If a project matches both `exclude_projects` and `project_names`, exclusion takes priority (privacy wins). Live reload supported.
 
 ### Session Focus
 

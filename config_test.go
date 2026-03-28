@@ -866,6 +866,33 @@ func TestIsProjectExcluded(t *testing.T) {
 	}
 }
 
+func TestResolveProjectName(t *testing.T) {
+	tests := []struct {
+		name      string
+		path      string
+		names     map[string]string
+		wantName  string
+		wantFound bool
+	}{
+		{"empty map", "/Users/me/project", nil, "", false},
+		{"empty path", "", map[string]string{"/a": "A"}, "", false},
+		{"exact match", "/Users/me/project", map[string]string{"/Users/me/project": "My Project"}, "My Project", true},
+		{"glob match", "/Users/me/work/client", map[string]string{"/Users/me/work/*": "Work"}, "Work", true},
+		{"no match", "/Users/me/public", map[string]string{"/other/*": "X"}, "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			name, found := resolveProjectName(tt.path, tt.names)
+			if found != tt.wantFound {
+				t.Errorf("found = %v, want %v", found, tt.wantFound)
+			}
+			if found && name != tt.wantName {
+				t.Errorf("name = %q, want %q", name, tt.wantName)
+			}
+		})
+	}
+}
+
 func TestCheckIdleDisable(t *testing.T) {
 	t.Run("disabled when 0", func(t *testing.T) {
 		if checkIdleDisable(true, time.Now().Add(-time.Hour), 0) {
@@ -979,6 +1006,36 @@ func TestModelIconsMerge(t *testing.T) {
 		}}
 		result := mergeConfig(defaults, user)
 		if result.Display.ModelIcons != nil {
+			t.Error("empty map should not override defaults")
+		}
+	})
+}
+
+func TestProjectNamesMerge(t *testing.T) {
+	defaults := DefaultConfig()
+
+	t.Run("nil by default", func(t *testing.T) {
+		if defaults.Display.ProjectNames != nil {
+			t.Error("ProjectNames should default to nil")
+		}
+	})
+
+	t.Run("user names applied", func(t *testing.T) {
+		user := &Config{Display: DisplayConfig{
+			ProjectNames: map[string]string{"/Users/me/project": "My Project"},
+		}}
+		result := mergeConfig(defaults, user)
+		if result.Display.ProjectNames["/Users/me/project"] != "My Project" {
+			t.Error("project name not set correctly")
+		}
+	})
+
+	t.Run("empty map not applied", func(t *testing.T) {
+		user := &Config{Display: DisplayConfig{
+			ProjectNames: map[string]string{},
+		}}
+		result := mergeConfig(defaults, user)
+		if result.Display.ProjectNames != nil {
 			t.Error("empty map should not override defaults")
 		}
 	})
