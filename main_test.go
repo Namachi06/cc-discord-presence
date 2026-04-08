@@ -718,3 +718,67 @@ func TestCleanupStaleSessions(t *testing.T) {
 		t.Error("fresh file should still exist")
 	}
 }
+
+func TestProcessSessionUpdateResetsTimerOnExtendedIdleResume(t *testing.T) {
+	// Save and restore global state
+	origIsIdle := isIdle
+	origIsDisabled := isDisabled
+	origSessionStartTime := sessionStartTime
+	origLastSessionData := lastSessionData
+	origLastDataChange := lastDataChange
+	origDisconnected := disconnected
+	origConfig := currentConfig
+	origLastPresenceDetails := lastPresenceDetails
+	origLastPresenceState := lastPresenceState
+	defer func() {
+		isIdle = origIsIdle
+		isDisabled = origIsDisabled
+		sessionStartTime = origSessionStartTime
+		lastSessionData = origLastSessionData
+		lastDataChange = origLastDataChange
+		disconnected = origDisconnected
+		currentConfig = origConfig
+		lastPresenceDetails = origLastPresenceDetails
+		lastPresenceState = origLastPresenceState
+	}()
+
+	// Setup: simulate extended idle disabled state
+	currentConfig = DefaultConfig()
+	currentConfig.Display.IdleTimeout = intPtr(60)
+	disconnected = true // prevent actual Discord IPC
+	isIdle = true
+	isDisabled = true
+	oldStartTime := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	sessionStartTime = oldStartTime
+	lastDataChange = time.Now().Add(-10 * time.Minute)
+
+	// Last session data (before idle)
+	lastSessionData = &SessionData{
+		ProjectName: "test-project",
+		TotalTokens: 1000,
+		StartTime:   oldStartTime,
+	}
+
+	// New session with changed data (triggers active-again detection)
+	newSession := &SessionData{
+		ProjectName: "test-project",
+		TotalTokens: 2000,
+		StartTime:   oldStartTime,
+	}
+
+	beforeCall := time.Now()
+	processSessionUpdate(newSession)
+
+	if isDisabled {
+		t.Error("isDisabled should be false after resume from extended idle")
+	}
+	if sessionStartTime.Equal(oldStartTime) {
+		t.Error("sessionStartTime should have been reset, but still has old value")
+	}
+	if sessionStartTime.Before(beforeCall) {
+		t.Errorf("sessionStartTime should be >= time of resume, got %v (before %v)", sessionStartTime, beforeCall)
+	}
+	if !newSession.StartTime.Equal(sessionStartTime) {
+		t.Errorf("session.StartTime should match new sessionStartTime, got %v vs %v", newSession.StartTime, sessionStartTime)
+	}
+}

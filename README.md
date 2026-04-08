@@ -267,13 +267,13 @@ Set to `0` to disable. Maximum: `3600` seconds (1 hour).
 
 ### Auto-disable on Extended Idle
 
-When `idle_disable` is set, the presence is **completely cleared** from Discord after being idle for the specified duration. Re-enables automatically when activity resumes. The timer starts when idle begins (after `idle_timeout`).
+When `idle_disable` is set, the presence is **completely cleared** from Discord after being idle for the specified duration. Re-enables automatically when activity resumes, with the **duration timer reset** to start fresh. The idle timer starts when idle begins (after `idle_timeout`).
 
 ```json
 {"display": {"idle_timeout": 300, "idle_disable": 5400}}
 ```
 
-Example: 5 min inactivity → "Idle" → after 1h30 more → presence disappears → activity resumes → presence reappears.
+Example: 5 min inactivity → "Idle" → after 1h30 more → presence disappears → activity resumes → presence reappears with timer reset.
 
 Requires `idle_timeout` to be set (otherwise the session never goes idle).
 

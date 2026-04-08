@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-04-08
+
+### Fixed
+- Duration timer now resets when resuming from extended idle (previously showed total time including idle period)
+
 ## [1.0.3] - 2026-01-20
 
 ### Added

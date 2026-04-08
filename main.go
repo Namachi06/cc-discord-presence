@@ -593,7 +593,9 @@ func processSessionUpdate(session *SessionData) {
 		fmt.Println("🔄 Session active again")
 		if isDisabled {
 			isDisabled = false
-			fmt.Println("✅ Presence re-enabled")
+			sessionStartTime = time.Now()
+			session.StartTime = sessionStartTime
+			fmt.Println("✅ Presence re-enabled (timer reset)")
 		}
 	}
 
